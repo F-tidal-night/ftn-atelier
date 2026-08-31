@@ -68,6 +68,18 @@ export default function Dashboard({ onNavigate }) {
   const startEngine = async (key) => {
     setEngineBusy(true); setTip('')
     try {
+      const eng = engines.find((e) => e.key === key)
+      if (eng?.kind === 'ftn_tag') {
+        // 本地 HTML 工具：无需端口/进程，直接在浏览器打开 html 文件
+        if (eng.entry) {
+          const res = await window.ftn?.openPath?.(eng.entry)
+          setTip(res?.ok ? `已打开 ${eng.entry}` : '无法打开（未找到 HTML 文件，请到设置 → 引擎路径确认）')
+        } else {
+          setTip('未设置 HTML 文件（请到设置 → 引擎路径配置启动文件）')
+        }
+        setEngineBusy(false)
+        return
+      }
       const r = await backendApi.engineStart(key)
       if (!r?.ok) {
         const msg = r?.msg || '启动失败'
@@ -75,7 +87,6 @@ export default function Dashboard({ onNavigate }) {
         // 端口隔离失败：弹窗明确提示哪个端口被谁占用
         if (r?.code === 'port_busy') window.alert(msg)
       } else {
-        // 首次启动（无虚拟环境）：引擎将自动装依赖，明确提示
         if (r?.first_run) {
           setTip('首次启动：引擎将自动创建环境并安装依赖（已用国内镜像，需要联网，可能较久），进度请到控制台查看')
         }
@@ -125,11 +136,14 @@ export default function Dashboard({ onNavigate }) {
   const heroImg = hero && (hero.startsWith('http') ? hero : `${BACKEND_URL}/api/hero`)
 
   const mainAction = () => {
+    // HTML 工具：只能启动（无 cmd 窗，不提供停止/重启），运行中按钮禁用
+    if (selIsHtml) return startEngine(sel)
     if (selRunning) return stopEngine()
     return startEngine(sel)
   }
-  const mainLabel = selRunning ? '停止' : '启动'
+  const mainLabel = selIsHtml ? '启动' : (selRunning ? '停止' : '启动')
   // 自由多开：只要选中的引擎可启动（有入口）就允许，其他引擎运行不阻塞
+  // HTML 工具不做运行保护：运行中仍可再点「启动」（多开/重开）
   const mainDisabled = busy || noEntry
 
   return (

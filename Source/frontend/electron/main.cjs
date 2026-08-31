@@ -413,6 +413,8 @@ ipcMain.handle('dialog:selectDirectory', async () => {
     properties: ['openDirectory', 'createDirectory'],
     title: '选择目录',
   })
+  // 原生对话框关闭后夺回窗口焦点，避免后续输入框无法聚焦/打字
+  try { win.focus(); if (win.webContents) win.webContents.focus() } catch {}
   if (result.canceled || result.filePaths.length === 0) {
     return { canceled: true, path: null }
   }
@@ -430,6 +432,7 @@ ipcMain.handle('dialog:selectImage', async () => {
       { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'] },
     ],
   })
+  try { win.focus(); if (win.webContents) win.webContents.focus() } catch {}
   if (result.canceled || result.filePaths.length === 0) {
     return { canceled: true, path: null }
   }
@@ -444,6 +447,7 @@ ipcMain.handle('dialog:selectFile', async () => {
     properties: ['openFile'],
     title: '选择文件',
   })
+  try { win.focus(); if (win.webContents) win.webContents.focus() } catch {}
   if (result.canceled || result.filePaths.length === 0) {
     return { canceled: true, path: null }
   }
@@ -462,6 +466,7 @@ ipcMain.handle('dialog:selectModelFiles', async () => {
       { name: '全部文件', extensions: ['*'] },
     ],
   })
+  try { win.focus(); if (win.webContents) win.webContents.focus() } catch {}
   if (result.canceled || result.filePaths.length === 0) {
     return { canceled: true, paths: [] }
   }
@@ -492,6 +497,7 @@ ipcMain.handle('dialog:saveTextFile', async (_evt, defaultName, content) => {
     defaultPath: defaultName || 'ftn-export.log',
     filters: [{ name: '日志', extensions: ['log', 'txt'] }],
   })
+  try { win.focus(); if (win.webContents) win.webContents.focus() } catch {}
   if (result.canceled || !result.filePath) return { canceled: true, path: null }
   try {
     fs.writeFileSync(result.filePath, content, 'utf-8')

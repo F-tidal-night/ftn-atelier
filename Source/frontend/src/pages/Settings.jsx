@@ -260,6 +260,9 @@ function EnginePaths() {
       setNewEngine((s) => ({ ...s, detection: null }))
     }
   }
+  const EMPTY_NEW = { label: '', kind: 'webui', root: '', entry: '', detection: null }
+  const openAdd = () => { setNewEngine({ ...EMPTY_NEW }); setAdding(true) }
+  const closeAdd = () => { setAdding(false); setNewEngine({ ...EMPTY_NEW }) }
   const pickEngineDir = async () => {
     const res = await window.ftn?.selectDirectory?.()
     if (res && !res.canceled && res.path) detectNew({ root: res.path })
@@ -310,7 +313,7 @@ function EnginePaths() {
           <h2 className="font-semibold text-txt-secondary">引擎 / 工具</h2>
           <p className="text-xs text-txt-muted mt-0.5">可增删改名 · 主引擎不可删（可改名 / 清空路径）</p>
         </div>
-        <button onClick={() => setAdding((v) => !v)}
+        <button onClick={openAdd}
           className="px-3 py-1.5 rounded-lg border border-accent/40 text-accent text-sm hover:bg-accent-soft">+ 新增引擎</button>
       </div>
 
@@ -343,7 +346,7 @@ function EnginePaths() {
             <p className="text-xs text-txt-muted">选择引擎根目录（自动识别 WebUI / 启动脚本 / HTML），或直接选择启动文件（.bat / .py / index.html）。</p>
           )}
           <div className="flex justify-end gap-2">
-            <button onClick={() => setAdding(false)} className="px-3 py-2 rounded-lg border border-base-border text-sm">取消</button>
+            <button onClick={closeAdd} className="px-3 py-2 rounded-lg border border-base-border text-sm">取消</button>
             <button onClick={doAdd} disabled={!newEngine.detection || !newEngine.label.trim()}
               className="px-4 py-2 rounded-lg bg-accent text-white text-sm disabled:opacity-40">确认新增</button>
           </div>
@@ -500,6 +503,11 @@ function QuickFolders() {
     save([...folders, { key: 'custom-' + Date.now(), label, mode: 'custom', custom_path: '' }])
     setNewLabel(''); setAdding(false)
   }
+  const closeAddFolder = () => { setAdding(false); setNewLabel('') }
+  const toggleAddFolder = () => {
+    if (adding) { setAdding(false); setNewLabel('') }
+    else setAdding(true)
+  }
 
   return (
     <section className="rounded-xl border border-base-border bg-base-surface p-5">
@@ -508,7 +516,7 @@ function QuickFolders() {
           <h2 className="font-semibold text-txt-secondary">首页快捷文件夹</h2>
           <p className="text-xs text-txt-muted mt-0.5">默认 5 项不可删除；可改名 / 「更改路径」手动指定 / 「重新检测」回退到主引擎自动检测。修改即自动保存。</p>
         </div>
-        <button onClick={() => setAdding((v) => !v)}
+        <button onClick={toggleAddFolder}
           className="px-3 py-1.5 rounded-lg border border-accent/40 text-accent text-sm hover:bg-accent-soft">＋ 新增文件夹</button>
       </div>
 
@@ -525,7 +533,7 @@ function QuickFolders() {
             onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); if (e.key === 'Escape') setAdding(false) }}
             onMouseDown={(e) => { if (e.target === e.currentTarget) e.currentTarget.focus() }} autoComplete="off" />
           <button onClick={doAdd} className="px-3 py-2 rounded-lg bg-accent text-white text-sm shrink-0">添加</button>
-          <button onClick={() => setAdding(false)} className="px-3 py-2 rounded-lg border border-base-border text-sm shrink-0">取消</button>
+          <button onClick={closeAddFolder} className="px-3 py-2 rounded-lg border border-base-border text-sm shrink-0">取消</button>
         </div>
       )}
 

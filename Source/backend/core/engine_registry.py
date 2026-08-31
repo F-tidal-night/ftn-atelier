@@ -213,6 +213,13 @@ class EngineRegistry:
                 for c in ["index.html", "启动.bat"]:
                     if os.path.exists(os.path.join(root, c)):
                         return os.path.join(root, c)
+                # HTML 工具：顶层任意 .html/.htm 也视为入口（index.html 只是常见命名）
+                try:
+                    for fn in os.listdir(root):
+                        if fn.lower().endswith((".html", ".htm")):
+                            return os.path.join(root, fn)
+                except Exception:
+                    pass
         except Exception:
             pass
         return ""
@@ -236,12 +243,13 @@ class EngineRegistry:
             elif ename.endswith(".bat"):
                 # webui.bat / webui-user.bat 属于 WebUI；其它 bat 视为启动脚本
                 kind = "webui" if ename in ("webui.bat", "webui-user.bat") else "batdir"
-            elif ename in ("index.html", "启动.bat"):
+            elif ename.endswith((".html", ".htm")) or ename in ("启动.bat",):
                 kind = "ftn_tag"
             else:
                 entry = ""  # 未知文件类型：回退到按目录探测
         if not entry or not kind:
-            for k in ("webui", "batdir", "ftn_tag"):
+            # 顺序：webui → html（无 cmd 窗，优先于 bat 兜底，避免 html 工具被误判成 bat）→ batdir
+            for k in ("webui", "ftn_tag", "batdir"):
                 e = self._detect_entry(k, root)
                 if e:
                     kind, entry = k, e

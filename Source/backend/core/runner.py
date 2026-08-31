@@ -333,6 +333,11 @@ class Runner:
             token = self._start_token
 
         cmd, is_demo, kind, port, root = self._resolve_launch(engine_key)
+        if kind == "ftn_tag":
+            # 本地 HTML 工具：无需端口/进程，首页点击「启动」直接在浏览器打开
+            with self._lock:
+                self.status = EngineStatus.STOPPED
+            return {"ok": False, "code": "local_html", "msg": "本地 HTML 工具无需启动进程：请在首页点击「启动」在浏览器中打开"}
         self._demo = is_demo
         self.engine_key = engine_key
         first_run = self._is_first_run(root, kind)
@@ -428,6 +433,9 @@ class Runner:
     def _start_extra(self, engine_key):
         """多开：以额外实例方式叠加启动（独立进程/日志/就绪探测/关闭）。"""
         cmd, is_demo, kind, port, root = self._resolve_launch(engine_key)
+        if kind == "ftn_tag":
+            # 本地 HTML 工具不启动进程（首页直接打开），不支持多开
+            return {"ok": False, "code": "local_html", "msg": "本地 HTML 工具无需启动进程"}
         label = self._engine_label(engine_key)
         first_run = self._is_first_run(root, kind)
         if first_run:
