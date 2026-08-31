@@ -252,6 +252,7 @@ function createStartupCheckWindow() {
     // 用户手动关掉自检窗 → 兜底显示主窗口
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.show()
+      mainWindow.focus()
     }
   })
   // 兜底：自检小窗长时间未出现（加载异常）→ 显示主窗口，避免应用卡住。
@@ -262,6 +263,7 @@ function createStartupCheckWindow() {
     }
     if (!startupCheckShown && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.show()
+      mainWindow.focus()
     }
   }, 12000)
 }
@@ -567,6 +569,7 @@ ipcMain.on('startup-check-done', () => {
   }
   if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
     mainWindow.show()
+    mainWindow.focus()
   }
 })
 
