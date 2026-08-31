@@ -65,6 +65,30 @@ def main():
         resume.cleanup_stale(base, keep_version="1.0.2")
         assert os.path.exists(part) and not os.path.exists(other)
         print("[6] 清理旧片段（保留目标版本）OK")
+
+        # 7) cleanup_updates_dir：历史包清理 + 保留目标版本 + backup/脚本/日志限量
+        import time
+        for name in ("FTN-Atelier-1.0.1.zip", "FTN-Atelier-1.0.3.zip", "FTN-Atelier-1.0.3.zip.part"):
+            open(os.path.join(base, name), "wb").close()
+        for i in range(5):
+            d = os.path.join(base, f"backup-{i}")
+            os.makedirs(d, exist_ok=True)
+            open(os.path.join(d, "x.dll"), "wb").close()
+        for i in range(4):
+            open(os.path.join(base, f"apply-{i}.ps1"), "w").close()
+        # 目标版本 1.0.2 的 .zip/.part/.meta 应保留
+        target_zip = os.path.join(base, "FTN-Atelier-1.0.2.zip")
+        open(target_zip, "wb").close()
+        write_meta(part, "1.0.2", URL, 100)
+        resume.cleanup_updates_dir(base, keep_version="1.0.2", keep_backups=3, keep_scripts=2)
+        assert os.path.exists(target_zip) and os.path.exists(part) and os.path.exists(part + ".meta.json")
+        assert not os.path.exists(os.path.join(base, "FTN-Atelier-1.0.1.zip"))
+        assert not os.path.exists(os.path.join(base, "FTN-Atelier-1.0.3.zip"))
+        backups = [n for n in os.listdir(base) if n.startswith("backup-")]
+        assert len(backups) == 3, backups
+        scripts = [n for n in os.listdir(base) if n.startswith("apply-")]
+        assert len(scripts) == 2, scripts
+        print("[7] 安装包/临时文件自动清理（保留目标版本、backup×3、脚本×2）OK")
     finally:
         shutil.rmtree(base, ignore_errors=True)
     print("\n=== Update Resume 全部通过 ===")

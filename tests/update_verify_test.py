@@ -73,6 +73,13 @@ def main():
         r6 = verifier.verify(task6)
         assert r6.ok and r6.sha_ok
         print("[6] 无 SHA-256 时跳过 OK")
+
+        # 7) GitHub digest 带 sha256: 前缀 → 规范化后匹配（真实场景修复）
+        task7 = DownloadTask(version="1.0.2", asset_url="u", asset_size=good_size,
+                             asset_sha256="sha256:" + good_sha, dest_zip=good, part_path=good)
+        r7 = verifier.verify(task7)
+        assert r7.ok and r7.sha_ok, r7.reason
+        print("[7] sha256: 前缀 digest 规范化比对 OK")
     finally:
         shutil.rmtree(base, ignore_errors=True)
     print("\n=== Update Verifier 全部通过 ===")
