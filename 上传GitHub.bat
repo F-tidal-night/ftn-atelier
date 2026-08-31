@@ -183,7 +183,7 @@ REM 防御：剥离可能混入的行尾回车/换行（个别输入方式会带
 if defined MSG ( for /f "delims=" %%M in ("%MSG%") do set "MSG=%%M" )
 if "%MSG%"=="" set "MSG=%DEFAULT_MSG%"
 
-REM 先检查 Git 用户名 / 邮箱（不配好一定提交失败）
+REM 先检查 Git 用户名 / 邮箱（不配好一定提交失败；缺了就当场引导设置一次）
 set "GNAME="
 %GIT% config user.name > "%TEMP%\ftn_up_name.tmp" 2>nul
 set /p GNAME=<"%TEMP%\ftn_up_name.tmp"
@@ -192,14 +192,34 @@ set "GEMAIL="
 %GIT% config user.email > "%TEMP%\ftn_up_email.tmp" 2>nul
 set /p GEMAIL=<"%TEMP%\ftn_up_email.tmp"
 del "%TEMP%\ftn_up_email.tmp" >nul 2>nul
-if "%GNAME%"=="" (
+set "NEED_USER="
+if "%GNAME%"=="" set "NEED_USER=1"
+if "%GEMAIL%"=="" set "NEED_USER=1"
+if defined NEED_USER (
     echo.
-    echo [提示] 你还没有设置 Git 用户名。请在命令行里执行下面两条（换成你自己的）：
-    echo   git config --global user.name "你的名字"
-    echo   git config --global user.email "你的邮箱"
-    echo 设置好后重新运行本脚本。
-    pause
-    exit /b 1
+    echo [提示] 还没有设置 Git 用户名/邮箱，现在设置一下（只需一次，会保存在这个仓库里）：
+    set "NEW_NAME=FTN Studio"
+    set /p "NEW_NAME=你的名字（直接回车用 FTN Studio）："
+    set "NEW_EMAIL=ftn-studio@users.noreply.github.com"
+    set /p "NEW_EMAIL=你的邮箱（直接回车用 GitHub 匿名邮箱）："
+    %GIT% config user.name "%NEW_NAME%" >nul 2>nul
+    %GIT% config user.email "%NEW_EMAIL%" >nul 2>nul
+    REM 保存后校验一次，避免静默失败
+    set "VERIFY="
+    %GIT% config user.name > "%TEMP%\ftn_up_verify.tmp" 2>nul
+    set /p VERIFY=<"%TEMP%\ftn_up_verify.tmp"
+    del "%TEMP%\ftn_up_verify.tmp" >nul 2>nul
+    if "%VERIFY%"=="" (
+        echo [错误] 用户名/邮箱保存失败，请手动执行下面两条：
+        echo   git config user.name "%NEW_NAME%"
+        echo   git config user.email "%NEW_EMAIL%"
+        pause
+        exit /b 1
+    )
+    set "GNAME=%NEW_NAME%"
+    set "GEMAIL=%NEW_EMAIL%"
+    echo   ✓ 已保存：%NEW_NAME% ^< %NEW_EMAIL% ^>
+    echo.
 )
 
 %GIT% commit -m "%MSG%" >nul 2>"%TEMP%\ftn_up_commit_err.tmp"
