@@ -11,8 +11,8 @@ Data/
 Backup/
 Database/
 
-# ---- 引擎实例（被管理对象，不入库）----
-Core/
+# ---- 引擎实例（仅根目录的 Core 不入库；Source/backend/core 是后端源码，必须入库）----
+/Core/
 
 # ---- 运行日志 ----
 Logs/

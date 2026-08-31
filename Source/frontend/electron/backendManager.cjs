@@ -251,55 +251,70 @@ async function shutdownBackend() {
 }
 
 /**
- * 强制清理遗留孤儿后端进程（用于异常恢复）
- * 遍历系统 python 进程并匹配启动的 main.py
+ * 强制清理遗留孤儿进程（用于异常恢复）
+ * 1) 孤儿后端：只匹配「本程序实际的 main.py」路径（精确路径，防误杀其它应用）
+ * 2) 孤儿引擎：只处理 Database/engine_pids.json 注册表标记过的 PID（进程标记），
+ *    并校验该 PID 的进程命令行仍指向注册时的引擎根目录（防 PID 复用），整树强杀
  */
 function forceCleanupOrphan() {
-  // Windows 下通过 wmic 查找命令行包含 backend 目录的 python 进程
   return new Promise((resolve) => {
-    const killMatched = (stdout) => {
-      const lines = String(stdout).split(/\r?\n/)
-      for (const line of lines) {
-        if (line.includes('main.py') && line.includes('backend')) {
-          const parts = line.split(',')
-          const pid = parts[parts.length - 1]?.trim()
-          if (pid && /^\d+$/.test(pid)) {
-            try {
-              exec(`taskkill /PID ${pid} /F`, { windowsHide: true })
-              console.log('[FTN] 清理孤儿后端进程 pid=%s', pid)
-            } catch {}
+    const killPid = (pid) => {
+      try {
+        exec(`taskkill /PID ${pid} /T /F`, { windowsHide: true })
+        console.log('[FTN] 清理孤儿进程 pid=%s', pid)
+      } catch {}
+    }
+    const escRe = (s) => String(s).replace(/\\/g, '\\\\').replace(/'/g, "''")
+    const psFind = (filterExpr, done) => {
+      const ps =
+        'powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name=\'python.exe\' or Name=\'pythonw.exe\'\\" ' +
+        `| Where-Object { $_.CommandLine -match ${filterExpr} } ` +
+        '| Select-Object -ExpandProperty ProcessId"'
+      exec(ps, { windowsHide: true }, (err, stdout) => {
+        if (!err && stdout) {
+          for (const pid of String(stdout).split(/\r?\n/)) {
+            const p = pid.trim()
+            if (p && /^\d+$/.test(p)) killPid(p)
           }
         }
-      }
+        done()
+      })
     }
-    // 方式一：wmic（部分系统不可用）
-    exec(
-      `wmic process where "name='python.exe' or name='pythonw.exe'" get processid,commandline /format:csv`,
-      { windowsHide: true },
-      (err, stdout) => {
-        if (err || !stdout || !String(stdout).includes('backend')) {
-          // 方式二：PowerShell Get-CimInstance 兜底
-          const ps = `powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name='python.exe' or Name='pythonw.exe'\\" | Where-Object { $_.CommandLine -match 'backend' -and $_.CommandLine -match 'main.py' } | Select-Object -ExpandProperty ProcessId"`
-          exec(ps, { windowsHide: true }, (err2, stdout2) => {
-            if (!err2 && stdout2) {
-              for (const pid of String(stdout2).split(/\r?\n/)) {
-                const p = pid.trim()
-                if (p && /^\d+$/.test(p)) {
-                  try {
-                    exec(`taskkill /PID ${p} /F`, { windowsHide: true })
-                    console.log('[FTN] 清理孤儿后端进程 pid=%s', p)
-                  } catch {}
-                }
-              }
-            }
-            resolve()
-          })
-          return
+    // 1) 孤儿后端：精确 main.py 路径
+    const mainPy = escRe(path.join(BACKEND_DIR, 'main.py'))
+    psFind(`'${mainPy}'`, () => {
+      // 2) 孤儿引擎：注册表标记过的 PID
+      const regPath = path.join(APP_DATA_DIR, 'Database', 'engine_pids.json')
+      fs.readFile(regPath, 'utf8', (err, data) => {
+        let entries = []
+        if (!err) {
+          try {
+            const parsed = JSON.parse(data)
+            if (Array.isArray(parsed)) entries = parsed
+          } catch {}
         }
-        killMatched(stdout)
-        resolve()
-      }
-    )
+        const next = () => {
+          if (entries.length === 0) {
+            resolve()
+            return
+          }
+          const e = entries.shift()
+          const pid = e && /^\d+$/.test(String(e.pid)) ? String(e.pid) : null
+          const root = (e && e.root) || ''
+          if (!pid || !root) {
+            next()
+            return
+          }
+          const ps = `powershell -NoProfile -Command "$p = Get-CimInstance Win32_Process -Filter \\"ProcessId=${pid}\\" | Where-Object { $_.CommandLine -match '${escRe(root)}' } | Select-Object -ExpandProperty ProcessId"`
+          exec(ps, { windowsHide: true }, (e2, stdout) => {
+            const p = String(stdout || '').trim()
+            if (/^\d+$/.test(p)) killPid(p)
+            next()
+          })
+        }
+        next()
+      })
+    })
   })
 }
 
