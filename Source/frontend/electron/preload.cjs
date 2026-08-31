@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('ftn', {
   // 获取后端信息
   getBackendInfo: () => ipcRenderer.invoke('backend:info'),
   getAppInfo: () => ipcRenderer.invoke('app:info'),
+  // 在线更新：应用已下载的更新包 zip（替换程序文件并重启）
+  applyUpdate: (zipPath) => ipcRenderer.invoke('update:apply', zipPath),
   // 应用 Logo（ico → dataURL，启动自检小窗 / 关于页统一展示）
   getLogo: () => ipcRenderer.invoke('app:logo'),
 

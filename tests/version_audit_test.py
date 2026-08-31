@@ -59,7 +59,9 @@ def main():
             assert "v1.7.0d" in tags, tags
             # 浮动/非版本 tag（latest）不算版本，必须排除
             assert "latest" not in tags, tags
-            assert calls[0][-1].startswith("https://github.com/")
+            # 镜像优先：第一个候选是配置镜像（ghproxy.com），官方直连兜底在末尾
+            assert "ghproxy.com" in calls[0][-1], calls[0][-1]
+            assert calls[0][-1].count("github.com") == 1, calls[0][-1]  # 无双重拼接
             assert calls[-1][-1].startswith("https://ghproxy.com/")
             print("[2] _fetch_tags 直连→镜像兜底 OK:", tags[:3])
         finally:

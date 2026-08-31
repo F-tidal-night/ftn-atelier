@@ -2,6 +2,7 @@
 import { backendApi } from '../services/apiClient'
 import { useApp } from '../state/AppContext'
 import SelfCheckModal from './SelfCheckModal'
+import { startUpdate } from '../utils/updater'
 
 // ============================================
 // M3 设置页面：可视化编辑 AppConfig（四类配置）
@@ -838,21 +839,49 @@ function SelfCheckSettings({ config, update }) {
   const [openDlg, setOpenDlg] = useState(false)
   const [updMsg, setUpdMsg] = useState(null)   // 版本检测结果
   const [checkingUpd, setCheckingUpd] = useState(false)
+  const [latestInfo, setLatestInfo] = useState(null)   // 检测到的最新版本信息（含资产）
+  const [updating, setUpdating] = useState(null)       // {pct, msg, error?} 全屏更新遮罩
+  const [ver, setVer] = useState('1.0.0')
+
+  useEffect(() => {
+    let alive = true
+    window.ftn?.getAppInfo?.().then((r) => { if (alive && r?.version) setVer(r.version) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
 
   const checkUpdate = async () => {
     setCheckingUpd(true)
     setUpdMsg(null)
+    setLatestInfo(null)
     try {
       const u = await backendApi.selfcheckUpdate()
-      if (u.config_missing) setUpdMsg({ type: 'info', text: '当前未配置更新源（暂不检查更新）。' })
-      else if (!u.ok) setUpdMsg({ type: 'error', text: `无法检测更新：${u.error || '未知'}` })
-      else if (u.has_update) setUpdMsg({ type: 'ok', text: `发现新版本 v${u.latest}（当前 v${u.current}）${u.url ? ' → ' + u.url : ''}` })
-      else setUpdMsg({ type: 'ok', text: `当前已是最新版本（v${u.current}）` })
+      if (!u.ok) setUpdMsg({ type: 'error', text: `无法检测更新：${u.error || '未知'}` })
+      else if (u.has_update) {
+        setLatestInfo(u)
+        setUpdMsg({ type: 'ok', text: `发现新版本 v${u.latest}（当前 v${u.current}，更新源 ${u.owner}/${u.repo}）` })
+      } else setUpdMsg({ type: 'ok', text: `当前已是最新版本（v${u.current}）` })
     } catch (e) {
       setUpdMsg({ type: 'error', text: `检测更新失败：${e.message}` })
     } finally {
       setCheckingUpd(false)
     }
+  }
+
+  // 一键更新（与自检弹窗同一实现）：下载 → 进度 → Electron 备份/替换/重启。
+  // 更新期间全屏遮罩，禁止任何操作（除强制结束进程）。
+  const beginUpdate = async () => {
+    if (!latestInfo) return
+    if (!window.confirm(
+      `将下载并应用更新 v${latestInfo.latest}（当前 v${latestInfo.current}）。\n\n` +
+      '下载完成后会自动替换程序文件并重启（保留 Core/Data/Database/Logs 等数据目录）。确定继续？'
+    )) return
+    setUpdating({ pct: 0, msg: '正在启动更新…' })
+    await startUpdate({
+      onProgress: (phase, pct, msg) => setUpdating({ pct: pct ?? 0, msg }),
+      onError: (err) => setUpdating({ pct: 0, msg: err, error: true }),
+      assetUrl: latestInfo?.asset?.url,
+      expectedVersion: latestInfo?.latest,
+    })
   }
 
   return (
@@ -869,7 +898,7 @@ function SelfCheckSettings({ config, update }) {
       </Field>
 
       <div className="border-t border-base-border pt-4 text-xs text-txt-muted">
-        <p>当前 FTN Atelier 版本：v1.0.0 ｜ 更新源：{sc.update_owner && sc.update_repo ? `已配置 ${sc.update_owner}/${sc.update_repo}` : '由发布方统一配置'}</p>
+        <p>当前 FTN Atelier 版本：v{ver} ｜ 更新源：由发布方统一配置（F-tidal-night/ftn-atelier）</p>
       </div>
 
       <div className="flex items-center gap-3 pt-1">
@@ -887,6 +916,14 @@ function SelfCheckSettings({ config, update }) {
           {updMsg.text}
         </div>
       )}
+      {latestInfo && !updating && (
+        <div className="flex items-center gap-2">
+          <button onClick={beginUpdate}
+            className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:opacity-90">
+            开始更新到 v{latestInfo.latest}
+          </button>
+        </div>
+      )}
 
       {openDlg && (
         <SelfCheckModal
@@ -894,6 +931,26 @@ function SelfCheckSettings({ config, update }) {
           checkUpdate={false}
           onClose={() => setOpenDlg(false)}
         />
+      )}
+
+      {/* 更新全屏遮罩：更新期间禁止任何操作（除强制结束进程） */}
+      {updating && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-6">
+          <div className="w-full max-w-md rounded-2xl border border-base-border bg-base-surface p-6 text-center">
+            <p className="font-semibold text-txt-primary">{updating.error ? '更新失败' : '正在更新 FTN Atelier…'}</p>
+            {!updating.error && (
+              <div className="mt-4 h-2 rounded-full bg-base-surface-2 overflow-hidden">
+                <div className="h-full bg-accent transition-all duration-300" style={{ width: `${updating.pct || 0}%` }} />
+              </div>
+            )}
+            <p className={`mt-3 text-sm break-words ${updating.error ? 'text-rose-400' : 'text-txt-muted'}`}>{updating.msg}</p>
+            {updating.error ? (
+              <button onClick={() => setUpdating(null)} className="mt-4 px-4 py-2 rounded-lg bg-accent text-white text-sm">关闭</button>
+            ) : (
+              <p className="mt-4 text-[11px] text-txt-muted">更新期间请勿关闭或操作程序；异常中断时可通过任务管理器强制结束进程。</p>
+            )}
+          </div>
+        </div>
       )}
     </section>
   )

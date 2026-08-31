@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   IconHome, IconModels, IconDownload, IconVersions, IconTheme,
   IconTool, IconLog, IconWidgets, IconSettings, IconAbout,
@@ -26,6 +26,12 @@ const NAV_ITEMS = [
  */
 export default function Layout({ active, onNavigate, children }) {
   const { ambientEffect, windowActive } = useApp()
+  const [ver, setVer] = useState('1.0.0')
+  useEffect(() => {
+    let alive = true
+    window.ftn?.getAppInfo?.().then((r) => { if (alive && r?.version) setVer(r.version) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       {/* 外观动画层（背景，不拦截点击） */}
@@ -56,7 +62,7 @@ export default function Layout({ active, onNavigate, children }) {
           })}
         </nav>
 
-        <div className="px-3 py-3 text-[10px] text-txt-muted border-t border-base-border">v1.0.0 · 生图引擎工作台</div>
+        <div className="px-3 py-3 text-[10px] text-txt-muted border-t border-base-border">v{ver} · 生图引擎工作台</div>
       </aside>
 
       {/* 内容区（半透明底，让外观动画在背后隐约透出） */}

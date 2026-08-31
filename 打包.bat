@@ -4,7 +4,7 @@ REM ============================================
 REM FTN Atelier 打包脚本（Windows）
 REM 只生成「开箱即用」便携版：
 REM   Source\frontend\release\win-unpacked\FTN Atelier.exe
-REM   → 压缩为工作区根目录 FTN-Atelier-Portable-1.0.0.zip
+REM   → 压缩为工作区根目录 FTN-Atelier-Portable-<版本>.zip（版本取自 package.json）
 REM
 REM 注意事项：
 REM   - 打包需联网下载 electron-builder 工具，已配置 npmmirror 镜像
@@ -52,7 +52,10 @@ if errorlevel 1 (
 
 echo [3/3] 生成便携版 zip（解压即用，自带 Python 运行时）...
 if exist "%ROOT%\Source\frontend\release\win-unpacked" (
-    tar.exe -a -c -f "%ROOT%\FTN-Atelier-Portable-1.0.0.zip" -C "%ROOT%\Source\frontend\release\win-unpacked" .
+    for /f "usebackq tokens=2 delims=:, " %%V in (`findstr /b "\"version\"" "%ROOT%\Source\frontend\package.json"`) do set "FTN_VER=%%~V"
+    set "FTN_VER=%FTN_VER:"=%"
+    if "%FTN_VER%"=="" set "FTN_VER=1.0.1"
+    tar.exe -a -c -f "%ROOT%\FTN-Atelier-Portable-%FTN_VER%.zip" -C "%ROOT%\Source\frontend\release\win-unpacked" .
 )
 if exist "%ROOT%\Source\frontend\release\win-unpacked" rmdir /s /q "%ROOT%\Source\frontend\release\win-unpacked"
 
@@ -60,7 +63,7 @@ echo.
 echo 打包完成。
 echo.
 echo 便携版已放至工作区根目录：
-echo   %ROOT%\FTN-Atelier-Portable-1.0.0.zip
+echo   %ROOT%\FTN-Atelier-Portable-%FTN_VER%.zip
 echo   解压后运行 FTN Atelier.exe 即可，无需安装、无需系统 Python。
 echo.
 echo （win-unpacked 为中间产物，打包后已自动清理）

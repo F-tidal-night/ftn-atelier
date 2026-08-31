@@ -203,7 +203,8 @@ def main():
 
         orig_urlopen = urllib.request.urlopen
         orig_check_output = subprocess.check_output
-        orig_mirror = vm._mirror_url
+        import core.mirrors as mirrors_mod
+        orig_prefix = mirrors_mod.configured_prefix
         calls = []
 
         def fake_check_output(cmd, **kw):
@@ -211,6 +212,8 @@ def main():
             calls.append(("git", url))
             if url.startswith("https://github.com/"):
                 raise subprocess.CalledProcessError(128, cmd, output=b"fatal: unable to access")
+            if url.startswith("https://ghproxy.com/"):
+                raise subprocess.CalledProcessError(128, cmd, output=b"mirror down")
             if url.startswith("https://gh-proxy.com/https://github.com/"):
                 return "b" * 40 + "\trefs/heads/main\n"
             raise AssertionError(f"unexpected git url: {url}")
@@ -226,17 +229,17 @@ def main():
 
         subprocess.check_output = fake_check_output
         urllib.request.urlopen = fake_urlopen
-        vm._mirror_url = lambda u: ("https://ghproxy.com/" + u) if u.startswith("http") else u
+        mirrors_mod.configured_prefix = lambda: "https://ghproxy.com"
         try:
             # 真实调用传的是完整仓库 URL（来自 _repo_of / 接管记录）
             sha = vm._gh_commit_sha("https://github.com/Panchovix/stable-diffusion-webui-reForge", "refs/heads/main")
             assert sha == "b" * 40, sha
             git_calls = [u for k, u in calls if k == "git"]
-            assert git_calls[0].startswith("https://github.com/"), git_calls
+            assert git_calls[0].startswith("https://ghproxy.com/"), git_calls  # 镜像优先（配置镜像）
             assert not any("github.com/github.com" in u for u in git_calls), git_calls  # 绝不双重拼接
-            assert git_calls[1].startswith("https://ghproxy.com/https://github.com/"), git_calls
+            assert git_calls[1].startswith("https://gh-proxy.com/https://github.com/"), git_calls
             assert git_calls[-1].startswith("https://gh-proxy.com/https://github.com/"), git_calls
-            assert len(git_calls) >= 3, git_calls
+            assert len(git_calls) >= 2, git_calls
             zip_dest = os.path.join(base, "dl.zip")
             vm._download_zip("https://github.com/Panchovix/stable-diffusion-webui-reForge", "main", zip_dest)
             assert open(zip_dest, "rb").read() == b"ZIPDATA"
@@ -258,7 +261,8 @@ def main():
         finally:
             urllib.request.urlopen = orig_urlopen
             subprocess.check_output = orig_check_output
-            vm._mirror_url = orig_mirror
+            mirrors_mod.configured_prefix = orig_prefix
+            mirrors_mod.clear_success()
     finally:
         for k in list(config_manager.load().engine_paths.extra):
             engine_registry.remove_engine(k)

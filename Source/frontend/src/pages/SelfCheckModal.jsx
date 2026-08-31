@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { backendApi } from '../services/apiClient'
 import { motion, AnimatePresence } from 'framer-motion'
+import { startUpdate } from '../utils/updater'
 
 // 状态 → 图标 / 颜色 / 中文
 const STATUS_META = {
@@ -21,6 +22,8 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
   const [total, setTotal] = useState(0)          // 后端声明的自检总项数（用于占位行 + 完成度进度条）
   const [current, setCurrent] = useState(null)   // 当前被询问/处理的项
   const [updateInfo, setUpdateInfo] = useState(undefined) // undefined=未检 | {..} 结果
+  const [updating, setUpdating] = useState(null)          // {pct, msg, error?} 更新进度/错误
+  const [updateSkipped, setUpdateSkipped] = useState(false) // 用户点了「暂不更新」
   const [busy, setBusy] = useState(false)
   const [fatal, setFatal] = useState(null)       // 无法自动修复的提示
   const [handled, setHandled] = useState({})     // {key:true} 已处理（已修复 或 用户选择跳过）的可修复项
@@ -40,6 +43,7 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
     setHandled({})
     setItems([])
     setTotal(0)
+    setUpdateSkipped(false)
     try {
       // 异步自检：逐项完成 → 轮询拉取 → 进度条逐步推进
       const start = await backendApi.selfcheckStart()
@@ -121,6 +125,18 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
   const unfixables = items.filter((i) => i.status !== 'ok' && !i.fixable)
   const pendingFixables = fixables.length
   const canEnter = phase === 'done' && !fatal && pendingFixables === 0 && !current
+  const updatingBusy = !!updating && !updating.error
+
+  // 一键更新：下载 → 进度 → Electron 应用替换（程序会自动重启）
+  const beginUpdate = async () => {
+    setUpdating({ pct: 0, msg: '正在启动更新…' })
+    await startUpdate({
+      onProgress: (phase, pct, msg) => setUpdating({ pct: pct ?? 0, msg }),
+      onError: (err) => setUpdating({ pct: 0, msg: err, error: true }),
+      assetUrl: updateInfo?.asset?.url,
+      expectedVersion: updateInfo?.latest,
+    })
+  }
   const okCount = items.filter((i) => i.status === 'ok').length
   // 占位行：后端声明 total 后立即铺满（未完成项显示"正在检测…"），
   // 进度条按「已完成 / 总数」推进，不再因前几项全正常而虚报 100%。
@@ -260,20 +276,34 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
             </AnimatePresence>
 
             {/* 版本更新检测 */}
-            {updateInfo && (
+            {updateInfo && !updateSkipped && (
               <div className={`p-3.5 rounded-xl border text-sm ${
                 updateInfo.has_update ? 'border-accent/50 bg-accent-soft/30' : 'border-base-border bg-base-surface-2/40'
               }`}>
                 {updateInfo.has_update ? (
+                  updating ? (
+                    <div>
+                      <p className="font-medium text-accent">🔄 正在更新到 v{updateInfo.latest}…</p>
+                      <div className="mt-2 h-2 rounded-full bg-base-surface-2 overflow-hidden">
+                        <div className="h-full bg-accent transition-all duration-300" style={{ width: `${updating.pct || 0}%` }} />
+                      </div>
+                      <p className={`mt-1.5 text-xs break-words ${updating.error ? 'text-rose-400' : 'text-txt-muted'}`}>{updating.msg}</p>
+                      {updating.error && (
+                        <div className="mt-2 flex justify-end">
+                          <button onClick={done} className="px-3 py-1.5 rounded-md border border-base-border text-xs">关闭</button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                   <>
                     <p className="font-medium text-accent">🔄 检测到新版本：v{updateInfo.latest}（当前 v{updateInfo.current}）</p>
                     <p className="text-xs text-txt-muted mt-1 break-words">{updateInfo.body || '建议更新到最新版本，获得修复与新功能。'}</p>
                     <div className="mt-2 flex gap-2 justify-end">
-                      <button onClick={done} className="px-3 py-1.5 rounded-md border border-base-border text-xs">暂不更新</button>
-                      <button onClick={() => updateInfo.url && window.ftn?.openPath && window.ftn.openPath(updateInfo.url)}
-                        className="px-3 py-1.5 rounded-md bg-accent text-white text-xs">前往更新</button>
+                      <button onClick={() => setUpdateSkipped(true)} className="px-3 py-1.5 rounded-md border border-base-border text-xs">暂不更新</button>
+                      <button onClick={beginUpdate} className="px-3 py-1.5 rounded-md bg-accent text-white text-xs">开始更新</button>
                     </div>
                   </>
+                  )
                 ) : updateInfo.ok !== false && !updateInfo.error ? (
                   <p className="text-txt-muted">✔ 当前已是最新版本（v{updateInfo.current}）</p>
                 ) : updateInfo.config_missing ? (
@@ -307,11 +337,11 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
 
           {/* 底部 */}
           <div className="mt-4 pt-4 border-t border-base-border flex items-center justify-between gap-3 shrink-0">
-            <button onClick={runSelfCheck} disabled={busy}
+            <button onClick={runSelfCheck} disabled={busy || updatingBusy}
               className="px-3.5 py-2 rounded-lg border border-base-border text-sm text-txt-muted hover:bg-base-surface-2 disabled:opacity-40">重新检测</button>
             <button
               onClick={done}
-              disabled={!canEnter}
+              disabled={!canEnter || updatingBusy}
               className="px-6 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: 'linear-gradient(135deg, var(--color-accent), var(--color-accent-hover))',

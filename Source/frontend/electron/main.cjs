@@ -17,6 +17,7 @@ const electron = require('electron')
 const { app, BrowserWindow, ipcMain, dialog, screen, nativeImage } = electron
 const path = require('path')
 const fs = require('fs')
+const { execFile, spawn } = require('child_process')
 
 const { ensureBackendUp, shutdownBackend, forceCleanupOrphan, BACKEND_PORT, BACKEND_HOST } = require('./backendManager.cjs')
 
@@ -295,6 +296,111 @@ ipcMain.handle('app:info', () => ({
   electron: process.versions.electron,
   isPackaged: app.isPackaged,
 }))
+
+// 在线更新（安全版）：
+//   1) 校验更新包 ZIP；
+//   2) 记录待应用信息 + 生成 detached 更新脚本（写在 Data/updates/ 下）；
+//   3) 关闭后端 → 退出主进程（解锁程序文件）；
+//   4) 更新脚本在主进程退出后：备份旧程序（排除 Core/Data/Database/Logs）
+//      → 解压新版 → 校验 → 成功清理备份并启动新版；
+//      失败则删除不完整新程序、恢复旧程序并弹窗提示；恢复失败时保留备份。
+const psq = (s) => "'" + String(s).replace(/'/g, "''") + "'"
+
+function buildUpdateScript({ zip, appRoot, backup }) {
+  // 生成 PowerShell 更新脚本（独立进程执行，主进程已退出）
+  return [
+    "$ErrorActionPreference = 'Continue'",
+    'Start-Sleep -Seconds 3',
+    `$root = ${psq(appRoot)}`,
+    `$zip = ${psq(zip)}`,
+    `$backup = ${psq(backup)}`,
+    `$keep = @('Core','Data','Database','Logs')`,
+    `$log = Join-Path $root 'Data\\updates\\apply.log'`,
+    'try {',
+    '  New-Item -ItemType Directory -Force -Path $backup | Out-Null',
+    '  # 1) 备份旧程序文件（排除用户数据目录）',
+    '  Get-ChildItem -LiteralPath $root -Force | Where-Object { $_.Name -notin $keep } | ForEach-Object {',
+    '    Move-Item -LiteralPath $_.FullName -Destination $backup -Force -ErrorAction Stop',
+    '  }',
+    '  # 2) 解压新版（Windows 自带 tar 支持 zip；包内为顶层文件）',
+    '  & tar.exe -xf $zip -C $root',
+    '  if ($LASTEXITCODE -ne 0) { throw "ZIP 解压失败（exit=$LASTEXITCODE）" }',
+    '  # 3) 校验新版关键文件',
+    "  $exe = Join-Path $root 'FTN Atelier.exe'",
+    "  if (-not (Test-Path -LiteralPath $exe)) { throw '更新包缺少主程序 FTN Atelier.exe' }",
+    '  # 4) 成功：清理临时备份 / 待应用标记 / 脚本自身，启动新版',
+    '  Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue',
+    "  Remove-Item -LiteralPath (Join-Path $root 'Data\\updates\\pending.json') -Force -ErrorAction SilentlyContinue",
+    '  Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue',
+    '  Start-Process -FilePath $exe -WorkingDirectory $root',
+    `  'OK' | Out-File -FilePath $log -Encoding utf8`,
+    '  exit 0',
+    '} catch {',
+    '  $err = $_.Exception.Message',
+    '  # 失败：删除不完整的新程序，恢复旧程序',
+    '  Get-ChildItem -LiteralPath $root -Force | Where-Object { $_.Name -notin $keep } | ForEach-Object {',
+    '    Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction SilentlyContinue',
+    '  }',
+    '  $restored = $true',
+    '  if (Test-Path -LiteralPath $backup) {',
+    '    Get-ChildItem -LiteralPath $backup -Force | ForEach-Object {',
+    '      try { Move-Item -LiteralPath $_.FullName -Destination $root -Force -ErrorAction Stop }',
+    '      catch { $restored = $false }',
+    '    }',
+    '  }',
+    "  $msg = \"更新失败：$err`n备份位置：$backup`n恢复旧版本：$(if ($restored) {'成功'} else {'失败（备份已保留，请勿删除）'})\"",
+    '  $msg | Out-File -FilePath $log -Encoding utf8',
+    '  try { Add-Type -AssemblyName PresentationFramework -ErrorAction Stop; [System.Windows.MessageBox]::Show($msg, "FTN Atelier 更新", "OK", "Warning") | Out-Null } catch {}',
+    "  if ($restored -and (Test-Path -LiteralPath (Join-Path $root 'FTN Atelier.exe'))) {",
+    '    Start-Process -FilePath (Join-Path $root "FTN Atelier.exe") -WorkingDirectory $root',
+    '  }',
+    '  exit 1',
+    '}',
+  ].join('\r\n')
+}
+
+ipcMain.handle('update:apply', async (event, zipPath) => {
+  try {
+    if (!app.isPackaged) {
+      return { ok: false, msg: '开发模式不支持在线更新替换，请在打包版中使用' }
+    }
+    if (!zipPath || !fs.existsSync(zipPath)) {
+      return { ok: false, msg: '更新包不存在：' + (zipPath || '空') }
+    }
+    const st = fs.statSync(zipPath)
+    if (st.size < 1024 * 1024) {
+      return { ok: false, msg: '更新包异常（体积过小），已停止，不会动现有程序' }
+    }
+    const appRoot = path.dirname(app.getPath('exe'))
+    const updatesDir = path.join(appRoot, 'Data', 'updates')
+    fs.mkdirSync(updatesDir, { recursive: true })
+    const ts = Date.now()
+    const backup = path.join(updatesDir, `backup-${ts}`)
+    // 记录待应用信息（脚本执行时读取；成功后被清理）
+    fs.writeFileSync(
+      path.join(updatesDir, 'pending.json'),
+      JSON.stringify({ zip: zipPath, appRoot, backup, ts })
+    )
+    // 生成 detached 更新脚本
+    const scriptPath = path.join(updatesDir, `apply-${ts}.ps1`)
+    // UTF-8 BOM：Windows PowerShell 5.1 需 BOM 才能正确解析含中文的 .ps1
+    fs.writeFileSync(scriptPath, '\uFEFF' + buildUpdateScript({ zip: zipPath, appRoot, backup }), 'utf8')
+    // 优雅关闭后端（会一并停止引擎实例）
+    try { await shutdownBackend() } catch { /* 后端可能已不在 */ }
+    // 启动独立更新进程（主进程退出后执行替换；防止删除运行中的程序文件）
+    const child = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', scriptPath],
+      { detached: true, stdio: 'ignore', windowsHide: true }
+    )
+    child.unref()
+    // 退出主进程，解锁程序文件
+    app.exit(0)
+    return { ok: true, msg: '正在应用更新并重启…' }
+  } catch (e) {
+    return { ok: false, msg: `应用更新失败：${e.message}` }
+  }
+})
 
 // 应用 Logo（ico → dataURL，供启动自检小窗 / 关于页统一展示）
 ipcMain.handle('app:logo', () => {

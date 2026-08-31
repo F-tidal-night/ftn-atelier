@@ -210,7 +210,7 @@ export default function Dashboard({ onNavigate }) {
                     <span className="block text-sm font-medium truncate" style={{ color: on ? 'var(--color-accent)' : 'var(--color-text-secondary)' }}>
                       {rowLabel}
                       {e.primary && (
-                        <span className="ml-1.5 align-middle text-[9px] px-1 py-0.5 rounded font-bold"
+                        <span className="ml-1.5 inline-block align-middle relative -top-0.5 text-[9px] px-1 py-0.5 rounded font-bold"
                           style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}>主</span>
                       )}
                     </span>

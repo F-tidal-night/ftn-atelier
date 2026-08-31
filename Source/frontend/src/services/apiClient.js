@@ -65,6 +65,7 @@ export const backendApi = {
   selfcheckStatus: (taskId) => api.get(`/api/selfcheck/status/${encodeURIComponent(taskId)}`),
   selfcheckFix: (key) => api.post('/api/selfcheck/fix', { key }),
   selfcheckUpdate: () => api.get('/api/selfcheck/update'),
+  updateDownload: (payload) => api.post('/api/update/download', payload || {}),
   // ===== 网络下载（CivitAI / HuggingFace）=====
   downloadSources: () => api.get('/api/downloads/sources'),
   civitaiSearch: (query, type, limit) => api.get(`/api/downloads/civitai/search?${new URLSearchParams({ query: query || '', type: type || '', limit: String(limit || 24) }).toString()}`),

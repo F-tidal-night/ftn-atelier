@@ -59,7 +59,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="FTN Atelier Backend", version="0.0.1", lifespan=lifespan)
+app = FastAPI(title="FTN Atelier Backend", version=FTN_APP_VERSION, lifespan=lifespan)
 
 # CORS：允许 Electron 渲染进程与本地 Vite dev server 访问
 app.add_middleware(
@@ -76,7 +76,7 @@ app.add_middleware(
 # ============================================
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "ftn-studio", "version": "0.0.1"}
+    return {"status": "ok", "service": "ftn-studio", "version": FTN_APP_VERSION}
 
 
 # ============================================
@@ -445,6 +445,17 @@ async def versions_env_install(engine_id: str):
 async def versions_env_check(engine_id: str):
     """检查实例环境状态（venv / PyTorch / skimage / numpy 对齐）。"""
     return version_manager.env_check(engine_id)
+
+
+@app.post("/api/update/download")
+async def update_download(payload: dict = None):
+    """下载最新版 FTN Atelier 更新包（GitHub Release 资产 zip，后台任务）。
+    可传入最近一次检测的 asset_url / expected_version 复用结果，避免重复请求 GitHub。"""
+    payload = payload or {}
+    return version_manager.update_download(
+        asset_url=payload.get("asset_url"),
+        expected_version=payload.get("expected_version"),
+    )
 
 
 @app.get("/api/versions/{base_key}/venv-strategy")
