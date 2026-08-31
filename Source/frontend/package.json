@@ -1,0 +1,64 @@
+{
+  "name": "ftn-studio-frontend",
+  "version": "1.0.0",
+  "description": "FTN Studio 前端 (Electron + React + Vite)",
+  "author": "FTN STUDIO",
+  "private": true,
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start:electron": "electron .",
+    "dev:electron": "concurrently -k \"npm:dev\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build:prod": "vite build && electron-builder"
+  },
+  "dependencies": {
+    "framer-motion": "^11.3.19",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.2.1",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.6",
+    "vite": "^5.3.5",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.ftn.studio",
+    "productName": "FTN Atelier",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!node_modules/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!venv/**"
+        ]
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "dir",
+      "icon": "electron/assets/logo1.ico"
+    },
+    "electronDist": "node_modules/electron/dist"
+  }
+}

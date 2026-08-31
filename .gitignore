@@ -1,0 +1,58 @@
+# ============================================
+# FTN Studio 版本控制忽略规则
+# 
+# 严格按照架构约束：
+# - Data/ Backup/ 以及用户资产目录必须忽略
+# - 禁止提交：模型文件、输出图片、引擎实例、用户配置备份
+# ============================================
+
+# ---- 用户数据与资产（永远不入库）----
+Data/
+Backup/
+Database/
+
+# ---- 引擎实例（被管理对象，不入库）----
+Core/
+
+# ---- 运行日志 ----
+Logs/
+
+# ---- Node / Electron 依赖 ----
+node_modules/
+out/
+dist/
+build/
+release/
+*.tsbuildinfo
+npm-debug.log*
+
+# ---- Python 后端 ----
+Source/backend/venv/
+Source/backend/runtime/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# ---- 前端 Vite / 构建缓存 ----
+Source/frontend/dist/
+Source/frontend/node_modules/
+.vite/
+
+# ---- 打包产物（便携版已同步到根目录；包含完整程序 + 嵌入式 Python，绝不可入库）----
+FTN-Atelier-Portable-*.zip
+FTN-Atelier-Portable-*/
+
+# ---- 图标源文件（保留入库，属项目资源）----
+# ico/
+
+# ---- 本地配置（含用户路径，不入库）----
+*.local.json
+config.local.json
+
+# ---- 系统/编辑器 ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

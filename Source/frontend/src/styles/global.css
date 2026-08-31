@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   FTN Studio 全局样式
+   主题通过 CSS 变量实现，支持亮/暗两大类
+   ============================================ */
+
+:root {
+  /* 亮色主题（默认） */
+  --color-bg: #f5f4fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0eff6;
+  --color-border: #e4e1f0;
+  --color-accent: #8b5cf6;      /* 紫色 */
+  --color-accent-hover: #7c3aed;
+  --color-accent-soft: #ede9fe;
+  --color-text-primary: #1f1b2e;
+  --color-text-secondary: #4a4458;
+  --color-text-muted: #8a8398;
+  --font-family-base: 'Segoe UI', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+}
+
+html.dark {
+  /* 暗色主题 */
+  --color-bg: #141120;
+  --color-surface: #1e1830;
+  --color-surface-2: #251e3a;
+  --color-border: #352b4e;
+  --color-accent: #c084fc;      /* 亮紫 */
+  --color-accent-hover: #d8b4fe;
+  --color-accent-soft: #2a2140;
+  --color-text-primary: #ede9fe;
+  --color-text-secondary: #c9c2de;
+  --color-text-muted: #8f86a8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family-base);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 输入框占位文字：比正文略淡但保证可读（暗色主题下默认灰色几乎看不见） */
+::placeholder {
+  color: color-mix(in srgb, var(--color-text-secondary) 86%, var(--color-text-primary) 14%);
+  opacity: 1;
+}
+
+/* 输入文字：跟随主题主色的「墨色系」（紫色→墨紫、蓝色→墨蓝），比默认灰更深更醒目 */
+input, select, textarea {
+  color: color-mix(in srgb, var(--color-accent) 78%, var(--color-text-primary) 22%);
+}
+
+/* 主题切换全局平滑过渡（仅颜色/边框，不影响布局性能） */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, box-shadow, fill, stroke;
+  transition-duration: 0.35s;
+  transition-timing-function: ease;
+}
+
+/* 一些元素不需要过渡动效（避免动画类干扰） */
+.animate-pulse,
+.animate-spin,
+.animate-bounce,
+.animate-ping {
+  transition: none;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+
+@layer utilities {
+  .no-select {
+    user-select: none;
+  }
+  /* Electron 无边框窗口拖拽区（启动自检独立小窗等） */
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
+}
