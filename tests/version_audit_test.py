@@ -59,10 +59,10 @@ def main():
             assert "v1.7.0d" in tags, tags
             # 浮动/非版本 tag（latest）不算版本，必须排除
             assert "latest" not in tags, tags
-            # 镜像优先：第一个候选是配置镜像（ghproxy.com），官方直连兜底在末尾
-            assert "ghproxy.com" in calls[0][-1], calls[0][-1]
-            assert calls[0][-1].count("github.com") == 1, calls[0][-1]  # 无双重拼接
-            assert calls[-1][-1].startswith("https://ghproxy.com/")
+            # 并行探测（直连失败 → 镜像成功）：存在镜像调用且无双重拼接
+            urls = [c[-1] for c in calls]
+            assert any("ghproxy.com" in u for u in urls), urls
+            assert all(u.count("github.com") == 1 for u in urls), urls  # 绝不双重拼接
             print("[2] _fetch_tags 直连→镜像兜底 OK:", tags[:3])
         finally:
             subprocess.check_output = orig_check

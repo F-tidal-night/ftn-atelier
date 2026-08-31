@@ -208,6 +208,7 @@ function createStartupCheckWindow() {
     frame: false,
     resizable: false,
     show: false,
+    alwaysOnTop: true,          // 自检/更新提示窗置顶，避免被其他窗口遮挡
     backgroundColor: '#141120',
     title: 'FTN Atelier 自检',
     webPreferences: {

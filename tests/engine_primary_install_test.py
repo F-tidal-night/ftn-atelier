@@ -235,10 +235,9 @@ def main():
             sha = vm._gh_commit_sha("https://github.com/Panchovix/stable-diffusion-webui-reForge", "refs/heads/main")
             assert sha == "b" * 40, sha
             git_calls = [u for k, u in calls if k == "git"]
-            assert git_calls[0].startswith("https://ghproxy.com/"), git_calls  # 镜像优先（配置镜像）
+            # 并行探测（直连/配置镜像失败 → gh-proxy 成功），顺序不固定
+            assert any("gh-proxy.com" in u for u in git_calls), git_calls
             assert not any("github.com/github.com" in u for u in git_calls), git_calls  # 绝不双重拼接
-            assert git_calls[1].startswith("https://gh-proxy.com/https://github.com/"), git_calls
-            assert git_calls[-1].startswith("https://gh-proxy.com/https://github.com/"), git_calls
             assert len(git_calls) >= 2, git_calls
             zip_dest = os.path.join(base, "dl.zip")
             vm._download_zip("https://github.com/Panchovix/stable-diffusion-webui-reForge", "main", zip_dest)

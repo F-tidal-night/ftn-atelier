@@ -149,10 +149,10 @@ export const backendApi = {
 
   // ===== 插件市场（下载/更新/URL安装/卸载） =====
   pluginMarket: (params) => api.get(`/api/plugins/market?${new URLSearchParams(params || {}).toString()}`),
-  pluginInstall: (repoUrl, key) => api.post('/api/plugins/install', { repo_url: repoUrl, key }),
-  pluginUpdate: (key) => api.post('/api/plugins/update', { key }),
+  pluginInstall: (repoUrl, key) => api.post('/api/plugins/install', { repo_url: repoUrl, key }, { timeout: 120000 }),
+  pluginUpdate: (key) => api.post('/api/plugins/update', { key }, { timeout: 120000 }),
   pluginUninstall: (key) => api.post('/api/plugins/uninstall', { key }),
-  pluginUrlInstall: (repoUrl, key) => api.post('/api/plugins/url-install', { repo_url: repoUrl, key }),
+  pluginUrlInstall: (repoUrl, key) => api.post('/api/plugins/url-install', { repo_url: repoUrl, key }, { timeout: 120000 }),
 
   // ===== 输出目录自动整理（不分日期） =====
   outputsAutoOrganize: () => api.get('/api/outputs/auto-organize'),

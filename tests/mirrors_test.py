@@ -75,6 +75,29 @@ def main():
     assert URL in re2
     print("[6] 官方直连始终保留 OK")
 
+    # 7) 并行轮换：最快成功源胜出，慢源不阻塞
+    import time
+
+    def fetcher_fast_first(url):
+        time.sleep(0.2)
+        return "DATA-" + url[:30]
+
+    t0 = time.time()
+    used3, result3 = mirrors.pick_first_ok_parallel(cands[:3], fetcher_fast_first, timeout=6)
+    assert used3 and result3.startswith("DATA-")
+    assert time.time() - t0 < 2, "并行应快速返回"
+    print("[7] 并行轮换（最快源胜出，不阻塞）OK:", used3)
+
+    # 8) 并行全失败 → 明确错误
+    mirrors.clear_success()
+
+    def fetcher_all_fail_parallel(url):
+        raise RuntimeError("down")
+
+    used4, err4 = mirrors.pick_first_ok_parallel(cands, fetcher_all_fail_parallel, timeout=3)
+    assert used4 is None and err4 is not None
+    print("[8] 并行全失败明确报错 OK")
+
     mirrors.clear_success()
     print("\n=== 镜像轮换回归全部通过 ===")
 

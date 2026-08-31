@@ -124,7 +124,8 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
   const fixables = items.filter((i) => i.status !== 'ok' && i.fixable && !handled[i.key])
   const unfixables = items.filter((i) => i.status !== 'ok' && !i.fixable)
   const pendingFixables = fixables.length
-  const canEnter = phase === 'done' && !fatal && pendingFixables === 0 && !current
+  // 检测完成即可进入（即使存在警告/错误，用户可自行决定；更新中仍锁定）
+  const canEnter = phase === 'done' && !current
   const updatingBusy = !!updating && !updating.error
 
   // 一键更新：下载 → 进度 → Electron 应用替换（程序会自动重启）
@@ -209,6 +210,47 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
 
           {/* 检测项 / 提示区（可滚动） */}
           <div className="flex-1 min-h-0 mt-4 space-y-2 overflow-auto pr-1">
+            {/* 版本更新检测（置顶，始终最先看到） */}
+            {updateInfo && !updateSkipped && (
+              <div className={`p-3.5 rounded-xl border text-sm ${
+                updateInfo.has_update ? 'border-accent/50 bg-accent-soft/30' : 'border-base-border bg-base-surface-2/40'
+              }`}>
+                {updateInfo.has_update ? (
+                  updating ? (
+                    <div>
+                      <p className="font-medium text-accent">🔄 正在更新到 v{updateInfo.latest}…</p>
+                      <div className="mt-2 h-2 rounded-full bg-base-surface-2 overflow-hidden">
+                        <div className="h-full bg-accent transition-all duration-300" style={{ width: `${updating.pct || 0}%` }} />
+                      </div>
+                      <p className={`mt-1.5 text-xs break-words ${updating.error ? 'text-rose-400' : 'text-txt-muted'}`}>{updating.msg}</p>
+                      {updating.error && (
+                        <div className="mt-2 flex justify-end">
+                          <button onClick={done} className="px-3 py-1.5 rounded-md border border-base-border text-xs">关闭</button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                  <>
+                    <p className="font-medium text-accent">🔄 检测到新版本：v{updateInfo.latest}（当前 v{updateInfo.current}）</p>
+                    <p className="text-xs text-txt-muted mt-1 break-words">{updateInfo.body || '建议更新到最新版本，获得修复与新功能。'}</p>
+                    <div className="mt-2 flex gap-2 justify-end">
+                      <button onClick={() => setUpdateSkipped(true)} className="px-3 py-1.5 rounded-md border border-base-border text-xs">暂不更新</button>
+                      <button onClick={beginUpdate} className="px-3 py-1.5 rounded-md bg-accent text-white text-xs">开始更新</button>
+                    </div>
+                  </>
+                  )
+                ) : updateInfo.ok !== false && !updateInfo.error ? (
+                  <p className="text-txt-muted">✔ 当前已是最新版本（v{updateInfo.current}）</p>
+                ) : updateInfo.config_missing ? (
+                  <div className="text-txt-muted">
+                    <p>ℹ 未配置更新源，暂不检查更新。</p>
+                  </div>
+                ) : (
+                  <p className="text-txt-muted">ℹ 无法检测更新：{updateInfo.error || '未知'}（稍后可在设置→软件修复更新重试）</p>
+                )}
+              </div>
+            )}
+
             {phase === 'loading' && items.length === 0 && (
               <p className="text-sm text-txt-muted text-center py-10">正在检测环境…</p>
             )}
@@ -275,47 +317,6 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
               )}
             </AnimatePresence>
 
-            {/* 版本更新检测 */}
-            {updateInfo && !updateSkipped && (
-              <div className={`p-3.5 rounded-xl border text-sm ${
-                updateInfo.has_update ? 'border-accent/50 bg-accent-soft/30' : 'border-base-border bg-base-surface-2/40'
-              }`}>
-                {updateInfo.has_update ? (
-                  updating ? (
-                    <div>
-                      <p className="font-medium text-accent">🔄 正在更新到 v{updateInfo.latest}…</p>
-                      <div className="mt-2 h-2 rounded-full bg-base-surface-2 overflow-hidden">
-                        <div className="h-full bg-accent transition-all duration-300" style={{ width: `${updating.pct || 0}%` }} />
-                      </div>
-                      <p className={`mt-1.5 text-xs break-words ${updating.error ? 'text-rose-400' : 'text-txt-muted'}`}>{updating.msg}</p>
-                      {updating.error && (
-                        <div className="mt-2 flex justify-end">
-                          <button onClick={done} className="px-3 py-1.5 rounded-md border border-base-border text-xs">关闭</button>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                  <>
-                    <p className="font-medium text-accent">🔄 检测到新版本：v{updateInfo.latest}（当前 v{updateInfo.current}）</p>
-                    <p className="text-xs text-txt-muted mt-1 break-words">{updateInfo.body || '建议更新到最新版本，获得修复与新功能。'}</p>
-                    <div className="mt-2 flex gap-2 justify-end">
-                      <button onClick={() => setUpdateSkipped(true)} className="px-3 py-1.5 rounded-md border border-base-border text-xs">暂不更新</button>
-                      <button onClick={beginUpdate} className="px-3 py-1.5 rounded-md bg-accent text-white text-xs">开始更新</button>
-                    </div>
-                  </>
-                  )
-                ) : updateInfo.ok !== false && !updateInfo.error ? (
-                  <p className="text-txt-muted">✔ 当前已是最新版本（v{updateInfo.current}）</p>
-                ) : updateInfo.config_missing ? (
-                  <div className="text-txt-muted">
-                    <p>ℹ 未配置更新源，暂不检查更新。</p>
-                  </div>
-                ) : (
-                  <p className="text-txt-muted">ℹ 无法检测更新：{updateInfo.error || '未知'}（稍后可在设置→软件修复更新重试）</p>
-                )}
-              </div>
-            )}
-
             {/* 无法自动修复 / 致命提示 */}
             {fatal && (
               <div className="p-3.5 rounded-xl border border-amber-400/50 bg-amber-500/10 text-sm text-amber-400">
@@ -348,7 +349,7 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
                 boxShadow: '0 10px 24px -10px color-mix(in srgb, var(--color-accent) 70%, transparent)',
               }}
             >
-              {canEnter ? '进入 FTN Atelier' : (phase === 'done' ? '有异常待处理' : '检测中…')}
+              {canEnter ? '进入 FTN Atelier' : '检测中…'}
             </button>
           </div>
           <p className="text-center text-[10px] text-txt-muted mt-3 shrink-0 tracking-widest">FTN STUDIO · 非侵入式 SD WebUI 工作台</p>
