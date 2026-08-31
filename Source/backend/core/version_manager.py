@@ -507,7 +507,13 @@ class VersionManager:
                         continue
                 except Exception:
                     pass
-                base = base_registry.infer(root) or base_registry.primary()
+                # 版本页只面向 reForge / Forge：外部引擎按实际家族归组，
+                # 其它家族（ComfyUI / A1111 / 未知）不进版本页，避免误导；
+                # 绝不盲目跟主基底（例如主基底是 forge 时不能把 reForge 归到 forge）。
+                fam = base_registry.family_of(root)
+                if fam not in ("reforge", "forge"):
+                    continue
+                base = fam
                 info = self._read_version(root)
                 out.append({
                     "id": root,
@@ -563,7 +569,11 @@ class VersionManager:
         """标记 active 版本（全局唯一）。"""
         active = db.get_meta("active_engine", None)
         all_rows = [r for rows in groups.values() for r in rows]
-        if not self.is_demo and active is None and all_rows:
+        # active 缺失或指向已不存在/已移除的实例 → 回退到“最新版本”行，
+        # 避免整页没有一个「当前」导致界面看不懂
+        if not self.is_demo and all_rows and (
+            active is None or active not in {r["id"] for r in all_rows}
+        ):
             top = max(all_rows, key=lambda r: self._ver_key(r["version"]))
             active = top["id"]
         for rows in groups.values():

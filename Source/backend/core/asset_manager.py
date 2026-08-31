@@ -138,7 +138,16 @@ class AssetManager:
             else:
                 roots = self._resolve_roots()
                 if not roots:
-                    return self._scan_result(started, 0, 0, scanned=0, note="未配置主引擎模型目录")
+                    # 主引擎已清空/无模型目录：全量扫描时同步清掉旧索引，
+                    # 否则清除主引擎后旧模型仍残留显示
+                    pruned = 0
+                    if full and not demo:
+                        pruned = self._prune_missing(set())
+                    return self._scan_result(
+                        started, 0, 0, scanned=0,
+                        note="未配置主引擎模型目录" + (f"，已清理 {pruned} 条旧记录" if pruned else ""),
+                        pruned=pruned,
+                    )
                 rows, skipped = self._walk_roots(roots, full)
             stats = self._index(rows, force_update=bool(full and not demo))
             pruned = 0

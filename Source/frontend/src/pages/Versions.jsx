@@ -710,12 +710,6 @@ function VersionRow({ v, isActive, onSwitch, onUpdatePick, onRollbackPick, onTak
           {isExternal ? (
             <>
               <button
-                onClick={() => onBind && onBind(v.id)}
-                disabled={busy}
-                className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
-                title="外部 ZIP 没有 .git，无法自动识别版本；可手动绑定来源 commit/tag（仅作展示）"
-              >{v.user_bound ? '重新绑定版本' : '绑定版本'}</button>
-              <button
                 onClick={() => onTakeover(v.id)}
                 disabled={busy}
                 className="px-3 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft disabled:opacity-40"
@@ -751,23 +745,17 @@ function VersionRow({ v, isActive, onSwitch, onUpdatePick, onRollbackPick, onTak
         </div>
       ) : (
         <div className="shrink-0 flex items-center gap-2">
-          <button
-            onClick={() => onSwitch(v.id)}
-            className="px-4 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft"
-          >切换至此</button>
-          {isExternal && (
-            <>
-              <button
-                onClick={() => onBind && onBind(v.id)}
-                disabled={busy}
-                className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
-              >{v.user_bound ? '重新绑定版本' : '绑定版本'}</button>
-              <button
-                onClick={() => onTakeover(v.id)}
-                disabled={busy}
-                className="px-3 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft disabled:opacity-40"
-              >接管为 Atelier 管理</button>
-            </>
+          {isExternal ? (
+            <button
+              onClick={() => onTakeover(v.id)}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft disabled:opacity-40"
+            >接管为 Atelier 管理</button>
+          ) : (
+            <button
+              onClick={() => onSwitch(v.id)}
+              className="px-4 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft"
+            >切换至此</button>
           )}
         </div>
       )}
