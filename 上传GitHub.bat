@@ -25,8 +25,8 @@ where git >nul 2>nul
 if errorlevel 1 (
     echo.
     echo [提示] 没有找到 Git，无法上传。
-    echo        请先安装 Git for Windows：https://git-scm.com/download/win
-    echo        安装完成后重新运行本脚本。
+    echo 请先安装 Git for Windows：https://git-scm.com/download/win
+    echo 安装完成后重新运行本脚本。
     pause
     exit /b 1
 )
@@ -34,13 +34,13 @@ if errorlevel 1 (
 if not exist ".git\" (
     echo.
     echo [提示] 这个文件夹还不是 Git 仓库，无法上传。
-    echo        请在仓库根目录（包含 .git 文件夹）运行本脚本。
+    echo 请在仓库根目录（包含 .git 文件夹）运行本脚本。
     pause
     exit /b 1
 )
 
 echo ============================================
-echo   FTN Atelier · 一键上传 GitHub
+echo FTN Atelier · 一键上传 GitHub
 echo ============================================
 echo.
 
@@ -54,20 +54,20 @@ if "%ORIGIN%"=="" (
     %GIT% remote add origin https://github.com/F-tidal-night/ftn-atelier.git >nul 2>nul
     if errorlevel 1 (
         echo [错误] 自动配置失败，请手动执行下面这行再重试：
-        echo   git remote add origin https://github.com/F-tidal-night/ftn-atelier.git
+        echo git remote add origin https://github.com/F-tidal-night/ftn-atelier.git
         pause
         exit /b 1
     )
-    echo   OK 已配置：https://github.com/F-tidal-night/ftn-atelier.git
+    echo OK 已配置：https://github.com/F-tidal-night/ftn-atelier.git
     set "ORIGIN=https://github.com/F-tidal-night/ftn-atelier.git"
 ) else (
     echo %ORIGIN% | findstr /i "F-tidal-night/ftn-atelier" >nul
     if errorlevel 1 (
         echo [1/6] 远程仓库指向的不是 ftn-atelier：
-        echo   %ORIGIN%
+        echo %ORIGIN%
         echo.
         echo 如果要上传到 FTN Atelier 仓库，请手动执行：
-        echo   git remote set-url origin https://github.com/F-tidal-night/ftn-atelier.git
+        echo git remote set-url origin https://github.com/F-tidal-night/ftn-atelier.git
         pause
         exit /b 1
     )
@@ -79,7 +79,7 @@ set "BRANCH="
 set /p BRANCH=<"%TEMP%\ftn_up_branch.tmp"
 del "%TEMP%\ftn_up_branch.tmp" >nul 2>nul
 if "%BRANCH%"=="" set "BRANCH=main"
-echo         当前分支：%BRANCH%（将上传 main 分支到 GitHub）
+echo 当前分支：%BRANCH%（将上传 main 分支到 GitHub）
 echo.
 
 REM ---------- 2) 查看改动 ----------
@@ -89,7 +89,7 @@ echo.
 %GIT% status --porcelain > "%TEMP%\ftn_up_status.tmp" 2>nul
 findstr /r /c:".*" "%TEMP%\ftn_up_status.tmp" >nul 2>nul
 if errorlevel 1 (
-    echo   没有任何改动，无需上传。再见！
+    echo 没有任何改动，无需上传。再见！
     del "%TEMP%\ftn_up_status.tmp" >nul 2>nul
     pause
     exit /b 0
@@ -116,9 +116,9 @@ if not errorlevel 1 (
                 pause
                 exit /b 1
             )
-            echo   OK 已加入：%%F
+            echo OK 已加入：%%F
         ) else (
-            echo   - 跳过：%%F
+            echo - 跳过：%%F
         )
     )
 ) else (
@@ -153,7 +153,7 @@ del "%TEMP%\ftn_up_staged.tmp" >nul 2>nul
 if defined BIG_HIT (
     echo.
     echo [错误] 上面这些文件（压缩包 / 程序 / 数据库等）不应该上传，已停止。
-    echo        请检查 .gitignore，或先手动移走这些文件再重试。
+    echo 请检查 .gitignore，或先手动移走这些文件再重试。
     pause
     exit /b 1
 )
@@ -177,10 +177,11 @@ powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd HH:mm'" > "%TEMP%\f
 set /p DEFAULT_MSG=<"%TEMP%\ftn_up_date.tmp"
 del "%TEMP%\ftn_up_date.tmp" >nul 2>nul
 set "DEFAULT_MSG=Update: %DEFAULT_MSG%"
-echo   默认说明：%DEFAULT_MSG%
-powershell -NoProfile -Command "Write-Host '输入你的说明（直接回车用默认）:'; $s = Read-Host; if ($null -eq $s) { '' } else { $s.Trim() }" > "%TEMP%\ftn_up_msg.tmp" 2>nul
-set /p MSG=<"%TEMP%\ftn_up_msg.tmp"
-del "%TEMP%\ftn_up_msg.tmp" >nul 2>nul
+echo 默认说明：%DEFAULT_MSG%
+echo.
+echo 输入你的说明（直接回车用默认）：
+set "MSG="
+set /p MSG=
 if "%MSG%"=="" set "MSG=%DEFAULT_MSG%"
 
 REM 先检查 Git 用户名 / 邮箱（不配好一定提交失败；缺了就当场引导设置一次）
@@ -198,12 +199,14 @@ if "%GEMAIL%"=="" set "NEED_USER=1"
 if defined NEED_USER (
     echo.
     echo [提示] 还没有设置 Git 用户名/邮箱，现在设置一下（只需一次，会保存在这个仓库里）：
-    powershell -NoProfile -Command "Write-Host '你的名字（直接回车用 FTN Studio）:'; $s = Read-Host; if ([string]::IsNullOrWhiteSpace($s)) { 'FTN Studio' } else { $s.Trim() }" > "%TEMP%\ftn_up_nn.tmp" 2>nul
-    set /p NEW_NAME=<"%TEMP%\ftn_up_nn.tmp"
-    del "%TEMP%\ftn_up_nn.tmp" >nul 2>nul
-    powershell -NoProfile -Command "Write-Host '你的邮箱（直接回车用 GitHub 匿名邮箱）:'; $s = Read-Host; if ([string]::IsNullOrWhiteSpace($s)) { 'ftn-studio@users.noreply.github.com' } else { $s.Trim() }" > "%TEMP%\ftn_up_ne.tmp" 2>nul
-    set /p NEW_EMAIL=<"%TEMP%\ftn_up_ne.tmp"
-    del "%TEMP%\ftn_up_ne.tmp" >nul 2>nul
+    set "NEW_NAME="
+    echo 你的名字（直接回车用 FTN Studio）：
+    set /p NEW_NAME=
+    if "%NEW_NAME%"=="" set "NEW_NAME=FTN Studio"
+    set "NEW_EMAIL="
+    echo 你的邮箱（直接回车用 GitHub 匿名邮箱）：
+    set /p NEW_EMAIL=
+    if "%NEW_EMAIL%"=="" set "NEW_EMAIL=ftn-studio@users.noreply.github.com"
     %GIT% config user.name "%NEW_NAME%" >nul 2>nul
     %GIT% config user.email "%NEW_EMAIL%" >nul 2>nul
     REM 保存后校验一次，避免静默失败
@@ -213,14 +216,14 @@ if defined NEED_USER (
     del "%TEMP%\ftn_up_verify.tmp" >nul 2>nul
     if "%VERIFY%"=="" (
         echo [错误] 用户名/邮箱保存失败，请手动执行下面两条：
-        echo   git config user.name "%NEW_NAME%"
-        echo   git config user.email "%NEW_EMAIL%"
+        echo git config user.name "%NEW_NAME%"
+        echo git config user.email "%NEW_EMAIL%"
         pause
         exit /b 1
     )
     set "GNAME=%NEW_NAME%"
     set "GEMAIL=%NEW_EMAIL%"
-    echo   OK 已保存：%NEW_NAME% ^< %NEW_EMAIL% ^>
+    echo OK 已保存：%NEW_NAME% ^< %NEW_EMAIL% ^>
     echo.
 )
 
@@ -249,23 +252,32 @@ if errorlevel 1 (
         echo.
         echo [提示] GitHub 上有新内容（别人或网页端改过），先自动同步一下再重新上传...
         del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
-        %GIT% fetch origin main >nul 2>nul
+        %GIT% fetch origin main > "%TEMP%\ftn_up_fetch.tmp" 2>&1
+        if errorlevel 1 (
+            type "%TEMP%\ftn_up_fetch.tmp"
+            del "%TEMP%\ftn_up_fetch.tmp" >nul 2>nul
+            echo.
+            echo [错误] 连接 GitHub 获取最新内容失败，请检查网络后重试。
+            pause
+            exit /b 1
+        )
+        del "%TEMP%\ftn_up_fetch.tmp" >nul 2>nul
         REM 判断本地是否领先（有没有本地独有的提交）
         set "LOCAL_AHEAD="
         %GIT% rev-list --count origin/main..main > "%TEMP%\ftn_up_ahead.tmp" 2>nul
         set /p LOCAL_AHEAD=<"%TEMP%\ftn_up_ahead.tmp"
         del "%TEMP%\ftn_up_ahead.tmp" >nul 2>nul
         if "%LOCAL_AHEAD%"=="0" (
-            echo   正在合并 GitHub 上的新内容（快进，不动你的改动）...
+            echo 正在合并 GitHub 上的新内容（快进，不动你的改动）...
             %GIT% merge --ff-only origin/main >nul 2>nul
             if errorlevel 1 (
                 echo [错误] 自动合并失败，请手动执行：
-                echo   git pull origin main
+                echo git pull origin main
                 echo 处理完后重新运行本脚本。
                 pause
                 exit /b 1
             )
-            echo   已同步，重新上传...
+            echo 已同步，重新上传...
             %GIT% push origin main 2>"%TEMP%\ftn_up_push_err.tmp"
             if errorlevel 1 (
                 echo.
@@ -284,18 +296,31 @@ if errorlevel 1 (
             if errorlevel 1 (
                 type "%TEMP%\ftn_up_rebase.tmp"
                 del "%TEMP%\ftn_up_rebase.tmp" >nul 2>nul
+                echo.
+                echo 冲突的文件（上面标 U 的就是 GitHub 和本地都动过的地方）：
+                %GIT% status --short
+                echo.
                 REM 自动恢复原状，避免留下 rebase 半状态（你的改动不会丢）
                 %GIT% rebase --abort >nul 2>nul
                 echo.
-                echo [提示] 自动合并遇到冲突（GitHub 和本地改了同一个地方），已自动恢复原状，你的改动没有丢失。
-                echo        如果想让两边都保留，可以自己解决冲突后再上传：
-                echo   git pull --rebase origin main
-                echo 按提示处理有冲突的文件后，重新运行本脚本即可。
+                echo [提示] 自动合并遇到冲突，已自动恢复原状，你的改动没有丢失。
+                echo 常见原因：GitHub 上和本地都改动了同一个文件（比如一边删了、一边还留着）。
+                echo 这种情况需要手动合并一次，复制下面两行到命令行执行：
+                echo.
+                echo git fetch origin main
+                echo git rebase origin/main
+                echo.
+                echo 合并时如果遇到冲突，想保留自己本地的文件，就执行：
+                echo git checkout --theirs -- "上传GitHub.bat" "工程说明.md"
+                echo git add .
+                echo git rebase --continue
+                echo.
+                echo 合并成功后重新运行本脚本即可上传。
                 pause
                 exit /b 1
             )
             del "%TEMP%\ftn_up_rebase.tmp" >nul 2>nul
-            echo   已合并完成，重新上传...
+            echo 已合并完成，重新上传...
             %GIT% push origin main 2>"%TEMP%\ftn_up_push_err.tmp"
             if errorlevel 1 (
                 echo.
@@ -312,9 +337,9 @@ if errorlevel 1 (
         del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
         echo.
         echo 常见原因和解决办法：
-        echo   - 如果弹出登录窗口：按提示登录即可（用户名 + 密码或令牌）；
-        echo   - 如果提示认证失败：到 Windows「凭据管理器 - Windows 凭据」检查 GitHub 登录信息；
-        echo   - 如果提示网络问题：检查网络或代理后重试。
+        echo - 如果弹出登录窗口：按提示登录即可（用户名 + 密码或令牌）；
+        echo - 如果提示认证失败：到 Windows「凭据管理器 - Windows 凭据」检查 GitHub 登录信息；
+        echo - 如果提示网络问题：检查网络或代理后重试。
         echo 处理好后重新运行本脚本。
         pause
         exit /b 1
@@ -329,10 +354,10 @@ del "%TEMP%\ftn_up_hash.tmp" >nul 2>nul
 
 echo.
 echo ============================================
-echo   OK 上传成功！
-echo   提交说明：%MSG%
-echo   最新版本号：%SHORT_HASH%
-echo   现在 GitHub 上已经有你的代码了。
+echo OK 上传成功！
+echo 提交说明：%MSG%
+echo 最新版本号：%SHORT_HASH%
+echo 现在 GitHub 上已经有你的代码了。
 echo ============================================
 echo.
 pause
