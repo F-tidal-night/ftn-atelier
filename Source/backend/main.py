@@ -762,6 +762,15 @@ async def engines_add(payload: dict):
     )
 
 
+@app.post("/api/engines/detect")
+async def engines_detect(payload: dict):
+    """新增引擎自动识别：选目录或启动文件 → 返回类型/入口/家族。"""
+    return engine_registry.detect_engine(
+        root=payload.get("root") or "",
+        entry=payload.get("entry") or "",
+    )
+
+
 @app.delete("/api/engines/{key}")
 async def engines_remove(key: str):
     return engine_registry.remove_engine(key)

@@ -196,7 +196,7 @@ class EngineRegistry:
         import glob
         try:
             if kind == "webui":
-                for c in ["webui.bat", "webui-user.bat", "launch.py"]:
+                for c in ["webui.bat", "webui-user.bat", "launch.py", "webui.py"]:
                     if os.path.exists(os.path.join(root, c)):
                         return os.path.join(root, c)
             elif kind == "batdir":
@@ -216,6 +216,52 @@ class EngineRegistry:
         except Exception:
             pass
         return ""
+
+    def detect_engine(self, root="", entry=""):
+        """新增引擎自动识别：优先按用户选的启动文件判定类型，
+        否则按根目录探测；同时识别家族。返回可直接用于新增的字段。"""
+        from core.base_registry import base_registry
+        root = (root or "").strip().rstrip("/\\")
+        entry = (entry or "").strip()
+        if entry and os.path.isfile(entry):
+            root = root or os.path.dirname(entry)
+        if not root or not os.path.isdir(root):
+            return {"ok": False, "msg": "请选择引擎根目录或启动文件"}
+
+        kind = ""
+        if entry:
+            ename = os.path.basename(entry).lower()
+            if ename.endswith(".py"):
+                kind = "webui"
+            elif ename.endswith(".bat"):
+                # webui.bat / webui-user.bat 属于 WebUI；其它 bat 视为启动脚本
+                kind = "webui" if ename in ("webui.bat", "webui-user.bat") else "batdir"
+            elif ename in ("index.html", "启动.bat"):
+                kind = "ftn_tag"
+            else:
+                entry = ""  # 未知文件类型：回退到按目录探测
+        if not entry or not kind:
+            for k in ("webui", "batdir", "ftn_tag"):
+                e = self._detect_entry(k, root)
+                if e:
+                    kind, entry = k, e
+                    break
+        if not kind or not entry:
+            return {
+                "ok": False,
+                "msg": "未能自动识别该目录的启动方式，请直接选择启动文件（.bat / .py / index.html）",
+            }
+
+        family = base_registry.family_of(root)
+        return {
+            "ok": True,
+            "root": root,
+            "entry": entry,
+            "kind": kind,
+            "kind_label": {"webui": "WebUI 引擎", "batdir": "启动脚本", "ftn_tag": "Tag 库"}.get(kind, kind),
+            "family": family,
+            "family_label": base_registry.FAMILY_LABELS.get(family, family or "未知"),
+        }
 
     # ---------- 编辑操作 ----------
     def add_engine(self, key, label, kind="webui", desc="", root=""):

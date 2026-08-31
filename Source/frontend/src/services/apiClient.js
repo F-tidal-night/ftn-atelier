@@ -139,6 +139,7 @@ export const backendApi = {
   // ===== M7 新增：引擎注册表 =====
   enginesList: () => api.get('/api/engines'),
   enginesAdd: (payload) => api.post('/api/engines', payload),
+  enginesDetect: (payload) => api.post('/api/engines/detect', payload),
   enginesRemove: (key) => api.delete(`/api/engines/${key}`),
   enginesRename: (key, label) => api.post(`/api/engines/${key}/rename`, { label }),
   enginesSetPath: (key, root) => api.post(`/api/engines/${key}/path`, { root }),

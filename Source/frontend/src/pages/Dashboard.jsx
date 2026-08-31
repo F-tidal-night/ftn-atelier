@@ -203,7 +203,7 @@ export default function Dashboard({ onNavigate }) {
                 <button key={e.key} onClick={() => !busy && setSel(e.key)}
                   disabled={!!(busy && engine?.engine !== e.key)}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-base-surface-2 disabled:opacity-50 text-left cursor-pointer"
-                  style={{ background: active && !on ? 'var(--color-accent-soft)' : 'transparent', border: active && !on ? '1px solid var(--color-accent)' : '1px solid transparent' }}>
+                  style={{ background: active ? 'var(--color-accent-soft)' : 'transparent', border: active ? '1px solid var(--color-accent)' : '1px solid transparent' }}>
                   <span className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ background: on ? 'var(--color-accent)' : 'var(--color-border)', boxShadow: on ? '0 0 8px var(--color-accent)' : 'none' }} />
                   <span className="flex-1 min-w-0">

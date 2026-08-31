@@ -153,7 +153,7 @@ function EnginePaths() {
   const [detectingEntry, setDetectingEntry] = useState(null) // 正在重新检测入口的引擎
   const [editEntry, setEditEntry] = useState(null)           // 手动编辑入口文件的引擎 key
   const [entryVal, setEntryVal] = useState('')               // 入口文件输入值
-  const [newEngine, setNewEngine] = useState({ label: '', kind: 'webui' })
+  const [newEngine, setNewEngine] = useState({ label: '', kind: 'webui', root: '', entry: '', detection: null })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -249,11 +249,35 @@ function EnginePaths() {
     else setBanner({ type: 'error', text: r.msg || '删除失败' })
   }
 
+  // 自动识别：选目录（按根目录内容判定 WebUI / 启动脚本 / HTML）或直接选启动文件
+  const detectNew = async (payload) => {
+    setBanner(null)
+    const r = await backendApi.enginesDetect(payload)
+    if (r?.ok) {
+      setNewEngine((s) => ({ ...s, kind: r.kind, root: r.root, entry: r.entry, detection: r }))
+    } else {
+      setBanner({ type: 'error', text: r?.msg || '识别失败' })
+      setNewEngine((s) => ({ ...s, detection: null }))
+    }
+  }
+  const pickEngineDir = async () => {
+    const res = await window.ftn?.selectDirectory?.()
+    if (res && !res.canceled && res.path) detectNew({ root: res.path })
+  }
+  const pickEngineFile = async () => {
+    const res = await window.ftn?.selectFile?.()
+    if (res && !res.canceled && res.path) detectNew({ entry: res.path })
+  }
   const doAdd = async () => {
     if (!newEngine.label.trim()) { setBanner({ type: 'error', text: '请填写引擎名称' }); return }
-    const r = await backendApi.enginesAdd(newEngine)
-    if (r.ok) { setBanner({ type: 'ok', text: `已新增引擎 ${newEngine.label}` }); setNewEngine({ label: '', kind: 'webui' }); setAdding(false); load() }
-    else setBanner({ type: 'error', text: r.msg || '新增失败' })
+    if (!newEngine.detection) { setBanner({ type: 'error', text: '请先「选择引擎目录」或「选择启动文件」完成识别' }); return }
+    const r = await backendApi.enginesAdd({ label: newEngine.label, kind: newEngine.kind, root: newEngine.root })
+    if (r.ok) {
+      if (newEngine.entry) await backendApi.enginesSetEntry(r.key, newEngine.entry)
+      setBanner({ type: 'ok', text: `已新增引擎 ${newEngine.label}（${newEngine.detection.kind_label}）` })
+      setNewEngine({ label: '', kind: 'webui', root: '', entry: '', detection: null })
+      setAdding(false); load()
+    } else setBanner({ type: 'error', text: r.msg || '新增失败' })
   }
 
   // 设为主引擎：把该引擎标记为主引擎（模型 / 插件 / 快捷文件夹 / 版本页随之跟随）
@@ -297,17 +321,32 @@ function EnginePaths() {
       )}
 
       {adding && (
-        <div className="mb-4 p-3 rounded-lg border border-accent/40 bg-accent-soft/30 grid grid-cols-2 gap-2">
-          <input placeholder="名称（如：Forge 测试）" value={newEngine.label}
-            onChange={(e) => setNewEngine({ ...newEngine, label: e.target.value })}
-            onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); if (e.key === 'Escape') setAdding(false) }}
-            className={inputCls} autoFocus />
-          <select value={newEngine.kind} onChange={(e) => setNewEngine({ ...newEngine, kind: e.target.value })} className={inputCls}>
-            <option value="webui">WebUI</option>
-            <option value="batdir">启动脚本</option>
-            <option value="ftn_tag">Tag 库</option>
-          </select>
-          <button onClick={doAdd} className="px-3 py-2 rounded-lg bg-accent text-white text-sm">确认新增</button>
+        <div className="mb-4 p-3 rounded-lg border border-accent/40 bg-accent-soft/30 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input placeholder="名称（如：Forge 测试）" value={newEngine.label}
+              onChange={(e) => setNewEngine({ ...newEngine, label: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); if (e.key === 'Escape') setAdding(false) }}
+              onMouseDown={(e) => { if (e.target === e.currentTarget) e.currentTarget.focus() }}
+              className={inputCls} autoFocus autoComplete="off" />
+            <div className="flex gap-2">
+              <button onClick={pickEngineDir} className="flex-1 px-3 py-2 rounded-lg border border-base-border text-sm hover:bg-base-surface-2">选择引擎目录</button>
+              <button onClick={pickEngineFile} className="flex-1 px-3 py-2 rounded-lg border border-base-border text-sm hover:bg-base-surface-2">选择启动文件</button>
+            </div>
+          </div>
+          {newEngine.detection ? (
+            <div className="text-xs text-txt-secondary leading-relaxed">
+              已识别：<b>{newEngine.detection.kind_label}</b>
+              {newEngine.detection.family ? ` · ${newEngine.detection.family_label} 家族` : ''}
+              <div className="text-txt-muted mt-0.5 break-all">启动文件：{newEngine.detection.entry}</div>
+            </div>
+          ) : (
+            <p className="text-xs text-txt-muted">选择引擎根目录（自动识别 WebUI / 启动脚本 / HTML），或直接选择启动文件（.bat / .py / index.html）。</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setAdding(false)} className="px-3 py-2 rounded-lg border border-base-border text-sm">取消</button>
+            <button onClick={doAdd} disabled={!newEngine.detection || !newEngine.label.trim()}
+              className="px-4 py-2 rounded-lg bg-accent text-white text-sm disabled:opacity-40">确认新增</button>
+          </div>
         </div>
       )}
 
@@ -483,7 +522,8 @@ function QuickFolders() {
         <div className="mb-4 p-3 rounded-lg border border-accent/40 bg-accent-soft/30 flex gap-2">
           <input autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
             placeholder="自定义文件夹名称" className={inputCls}
-            onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); if (e.key === 'Escape') setAdding(false) }} autoComplete="off" />
+            onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); if (e.key === 'Escape') setAdding(false) }}
+            onMouseDown={(e) => { if (e.target === e.currentTarget) e.currentTarget.focus() }} autoComplete="off" />
           <button onClick={doAdd} className="px-3 py-2 rounded-lg bg-accent text-white text-sm shrink-0">添加</button>
           <button onClick={() => setAdding(false)} className="px-3 py-2 rounded-lg border border-base-border text-sm shrink-0">取消</button>
         </div>
