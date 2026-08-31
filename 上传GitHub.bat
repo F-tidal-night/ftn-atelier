@@ -5,7 +5,7 @@ REM ============================================
 REM FTN Atelier · 一键上传 GitHub
 REM
 REM 双击运行，跟着提示走就行：
-REM   查看改动 → 确认新文件 → 写提交说明 → 上传到 GitHub
+REM   查看改动 -> 确认新文件 -> 写提交说明 -> 上传到 GitHub
 REM 用法：上传GitHub.bat [仓库目录]（可选，默认本脚本所在文件夹）
 REM
 REM 安全约定（本脚本绝不执行）：
@@ -50,7 +50,7 @@ set "ORIGIN="
 set /p ORIGIN=<"%TEMP%\ftn_up_origin.tmp"
 del "%TEMP%\ftn_up_origin.tmp" >nul 2>nul
 if "%ORIGIN%"=="" (
-    echo [1/6] 还没配置远程仓库，自动为你补上…
+    echo [1/6] 还没配置远程仓库，自动为你补上...
     %GIT% remote add origin https://github.com/F-tidal-night/ftn-atelier.git >nul 2>nul
     if errorlevel 1 (
         echo [错误] 自动配置失败，请手动执行下面这行再重试：
@@ -58,7 +58,7 @@ if "%ORIGIN%"=="" (
         pause
         exit /b 1
     )
-    echo   ✓ 已配置：https://github.com/F-tidal-night/ftn-atelier.git
+    echo   OK 已配置：https://github.com/F-tidal-night/ftn-atelier.git
     set "ORIGIN=https://github.com/F-tidal-night/ftn-atelier.git"
 ) else (
     echo %ORIGIN% | findstr /i "F-tidal-night/ftn-atelier" >nul
@@ -116,7 +116,7 @@ if not errorlevel 1 (
                 pause
                 exit /b 1
             )
-            echo   ✓ 已加入：%%F
+            echo   OK 已加入：%%F
         ) else (
             echo   - 跳过：%%F
         )
@@ -178,9 +178,9 @@ set /p DEFAULT_MSG=<"%TEMP%\ftn_up_date.tmp"
 del "%TEMP%\ftn_up_date.tmp" >nul 2>nul
 set "DEFAULT_MSG=Update: %DEFAULT_MSG%"
 echo   默认说明：%DEFAULT_MSG%
-set /p "MSG=直接回车用默认，或输入你自己的说明："
-REM 防御：剥离可能混入的行尾回车/换行（个别输入方式会带 \r）
-if defined MSG ( for /f "delims=" %%M in ("%MSG%") do set "MSG=%%M" )
+powershell -NoProfile -Command "Write-Host '输入你的说明（直接回车用默认）:'; $s = Read-Host; if ($null -eq $s) { '' } else { $s.Trim() }" > "%TEMP%\ftn_up_msg.tmp" 2>nul
+set /p MSG=<"%TEMP%\ftn_up_msg.tmp"
+del "%TEMP%\ftn_up_msg.tmp" >nul 2>nul
 if "%MSG%"=="" set "MSG=%DEFAULT_MSG%"
 
 REM 先检查 Git 用户名 / 邮箱（不配好一定提交失败；缺了就当场引导设置一次）
@@ -198,10 +198,12 @@ if "%GEMAIL%"=="" set "NEED_USER=1"
 if defined NEED_USER (
     echo.
     echo [提示] 还没有设置 Git 用户名/邮箱，现在设置一下（只需一次，会保存在这个仓库里）：
-    set "NEW_NAME=FTN Studio"
-    set /p "NEW_NAME=你的名字（直接回车用 FTN Studio）："
-    set "NEW_EMAIL=ftn-studio@users.noreply.github.com"
-    set /p "NEW_EMAIL=你的邮箱（直接回车用 GitHub 匿名邮箱）："
+    powershell -NoProfile -Command "Write-Host '你的名字（直接回车用 FTN Studio）:'; $s = Read-Host; if ([string]::IsNullOrWhiteSpace($s)) { 'FTN Studio' } else { $s.Trim() }" > "%TEMP%\ftn_up_nn.tmp" 2>nul
+    set /p NEW_NAME=<"%TEMP%\ftn_up_nn.tmp"
+    del "%TEMP%\ftn_up_nn.tmp" >nul 2>nul
+    powershell -NoProfile -Command "Write-Host '你的邮箱（直接回车用 GitHub 匿名邮箱）:'; $s = Read-Host; if ([string]::IsNullOrWhiteSpace($s)) { 'ftn-studio@users.noreply.github.com' } else { $s.Trim() }" > "%TEMP%\ftn_up_ne.tmp" 2>nul
+    set /p NEW_EMAIL=<"%TEMP%\ftn_up_ne.tmp"
+    del "%TEMP%\ftn_up_ne.tmp" >nul 2>nul
     %GIT% config user.name "%NEW_NAME%" >nul 2>nul
     %GIT% config user.email "%NEW_EMAIL%" >nul 2>nul
     REM 保存后校验一次，避免静默失败
@@ -218,7 +220,7 @@ if defined NEED_USER (
     )
     set "GNAME=%NEW_NAME%"
     set "GEMAIL=%NEW_EMAIL%"
-    echo   ✓ 已保存：%NEW_NAME% ^< %NEW_EMAIL% ^>
+    echo   OK 已保存：%NEW_NAME% ^< %NEW_EMAIL% ^>
     echo.
 )
 
@@ -235,23 +237,88 @@ del "%TEMP%\ftn_up_commit_err.tmp" >nul 2>nul
 
 REM ---------- 6) 推送到 GitHub ----------
 echo.
-echo [6/6] 正在上传到 GitHub（第一次会弹出 GitHub 登录窗口，按提示登录即可）…
+echo [6/6] 正在上传到 GitHub（第一次会弹出 GitHub 登录窗口，按提示登录即可）...
 %GIT% push origin main 2>"%TEMP%\ftn_up_push_err.tmp"
 if errorlevel 1 (
     echo.
     echo [提示] 上传失败，GitHub 暂时没有收到你的改动。
     echo.
     type "%TEMP%\ftn_up_push_err.tmp"
-    del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
-    echo.
-    echo 常见解决办法：
-    echo   - 如果弹出登录窗口：按提示登录即可（用户名 + 密码/令牌）；
-    echo   - 如果提示 rejected / fetch first：说明 GitHub 上有新内容，先拉取再上传：
-    echo       git pull origin main
-    echo     然后重新运行本脚本；
-    echo   - 如果提示认证失败：到 Windows「凭据管理器 → Windows 凭据」检查 GitHub 凭据。
-    pause
-    exit /b 1
+    findstr /i /c:"rejected" /c:"fetch first" "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
+    if not errorlevel 1 (
+        echo.
+        echo [提示] GitHub 上有新内容（别人或网页端改过），先自动同步一下再重新上传...
+        del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
+        %GIT% fetch origin main >nul 2>nul
+        REM 判断本地是否领先（有没有本地独有的提交）
+        set "LOCAL_AHEAD="
+        %GIT% rev-list --count origin/main..main > "%TEMP%\ftn_up_ahead.tmp" 2>nul
+        set /p LOCAL_AHEAD=<"%TEMP%\ftn_up_ahead.tmp"
+        del "%TEMP%\ftn_up_ahead.tmp" >nul 2>nul
+        if "%LOCAL_AHEAD%"=="0" (
+            echo   正在合并 GitHub 上的新内容（快进，不动你的改动）...
+            %GIT% merge --ff-only origin/main >nul 2>nul
+            if errorlevel 1 (
+                echo [错误] 自动合并失败，请手动执行：
+                echo   git pull origin main
+                echo 处理完后重新运行本脚本。
+                pause
+                exit /b 1
+            )
+            echo   已同步，重新上传...
+            %GIT% push origin main 2>"%TEMP%\ftn_up_push_err.tmp"
+            if errorlevel 1 (
+                echo.
+                type "%TEMP%\ftn_up_push_err.tmp"
+                del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
+                echo.
+                echo 仍然上传失败。请确认网络正常、已登录 GitHub，然后重新运行本脚本。
+                pause
+                exit /b 1
+            )
+            del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
+        ) else (
+            echo.
+            echo [提示] GitHub 上有新内容，你本地也有新改动。正在自动合并（rebase，不会丢你的改动）...
+            %GIT% pull --rebase origin main > "%TEMP%\ftn_up_rebase.tmp" 2>&1
+            if errorlevel 1 (
+                type "%TEMP%\ftn_up_rebase.tmp"
+                del "%TEMP%\ftn_up_rebase.tmp" >nul 2>nul
+                REM 自动恢复原状，避免留下 rebase 半状态（你的改动不会丢）
+                %GIT% rebase --abort >nul 2>nul
+                echo.
+                echo [提示] 自动合并遇到冲突（GitHub 和本地改了同一个地方），已自动恢复原状，你的改动没有丢失。
+                echo        如果想让两边都保留，可以自己解决冲突后再上传：
+                echo   git pull --rebase origin main
+                echo 按提示处理有冲突的文件后，重新运行本脚本即可。
+                pause
+                exit /b 1
+            )
+            del "%TEMP%\ftn_up_rebase.tmp" >nul 2>nul
+            echo   已合并完成，重新上传...
+            %GIT% push origin main 2>"%TEMP%\ftn_up_push_err.tmp"
+            if errorlevel 1 (
+                echo.
+                type "%TEMP%\ftn_up_push_err.tmp"
+                del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
+                echo.
+                echo 仍然上传失败。请确认网络正常、已登录 GitHub，然后重新运行本脚本。
+                pause
+                exit /b 1
+            )
+            del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
+        )
+    ) else (
+        del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
+        echo.
+        echo 常见原因和解决办法：
+        echo   - 如果弹出登录窗口：按提示登录即可（用户名 + 密码或令牌）；
+        echo   - 如果提示认证失败：到 Windows「凭据管理器 - Windows 凭据」检查 GitHub 登录信息；
+        echo   - 如果提示网络问题：检查网络或代理后重试。
+        echo 处理好后重新运行本脚本。
+        pause
+        exit /b 1
+    )
 )
 del "%TEMP%\ftn_up_push_err.tmp" >nul 2>nul
 
@@ -262,7 +329,7 @@ del "%TEMP%\ftn_up_hash.tmp" >nul 2>nul
 
 echo.
 echo ============================================
-echo   ✅ 上传成功！
+echo   OK 上传成功！
 echo   提交说明：%MSG%
 echo   最新版本号：%SHORT_HASH%
 echo   现在 GitHub 上已经有你的代码了。
