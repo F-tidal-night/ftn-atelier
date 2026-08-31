@@ -13,12 +13,19 @@ const POLL_INTERVAL = 1200
  * @param {(err: string) => void} opts.onError
  * @param {string} [opts.assetUrl] 最近一次检测到的更新包下载 URL（复用结果，避免重复请求 GitHub）
  * @param {string} [opts.expectedVersion] 最近一次检测到的最新版本号
+ * @param {number} [opts.assetSize] 更新包大小（字节）
+ * @param {string} [opts.assetSha256] 更新包 SHA-256（若 Release 提供）
  * @returns {Promise<boolean>} 是否已进入「应用更新」阶段（程序即将替换并重启）
  */
-export async function startUpdate({ onProgress, onError, assetUrl, expectedVersion }) {
+export async function startUpdate({ onProgress, onError, assetUrl, expectedVersion, assetSize, assetSha256 }) {
   try {
     onProgress('preparing', 0, '正在启动更新…')
-    const r = await backendApi.updateDownload({ asset_url: assetUrl, expected_version: expectedVersion })
+    const r = await backendApi.updateDownload({
+      asset_url: assetUrl,
+      expected_version: expectedVersion,
+      asset_size: assetSize,
+      asset_sha256: assetSha256,
+    })
     if (!r?.ok) {
       onError(r?.msg || '下载启动失败')
       return false

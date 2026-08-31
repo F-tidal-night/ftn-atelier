@@ -361,15 +361,26 @@ function buildUpdateScript({ zip, appRoot, backup }) {
 }
 
 ipcMain.handle('update:apply', async (event, zipPath) => {
+  const _updLog = (msg) => {
+    try {
+      const appRoot = path.dirname(app.getPath('exe'))
+      const logPath = path.join(appRoot, 'Data', 'updates', 'updater-electron.log')
+      fs.mkdirSync(path.dirname(logPath), { recursive: true })
+      fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`)
+    } catch { /* 日志失败不影响更新 */ }
+  }
   try {
     if (!app.isPackaged) {
+      _updLog('开发模式，跳过更新替换')
       return { ok: false, msg: '开发模式不支持在线更新替换，请在打包版中使用' }
     }
     if (!zipPath || !fs.existsSync(zipPath)) {
+      _updLog('更新包不存在：' + (zipPath || '空'))
       return { ok: false, msg: '更新包不存在：' + (zipPath || '空') }
     }
     const st = fs.statSync(zipPath)
     if (st.size < 1024 * 1024) {
+      _updLog('更新包异常（体积过小）')
       return { ok: false, msg: '更新包异常（体积过小），已停止，不会动现有程序' }
     }
     const appRoot = path.dirname(app.getPath('exe'))
@@ -377,28 +388,51 @@ ipcMain.handle('update:apply', async (event, zipPath) => {
     fs.mkdirSync(updatesDir, { recursive: true })
     const ts = Date.now()
     const backup = path.join(updatesDir, `backup-${ts}`)
-    // 记录待应用信息（脚本执行时读取；成功后被清理）
-    fs.writeFileSync(
-      path.join(updatesDir, 'pending.json'),
-      JSON.stringify({ zip: zipPath, appRoot, backup, ts })
-    )
-    // 生成 detached 更新脚本
+    const pendingPath = path.join(updatesDir, 'pending.json')
     const scriptPath = path.join(updatesDir, `apply-${ts}.ps1`)
+    const startedMarker = path.join(updatesDir, 'updater-started.log')
+    // 记录待应用信息（脚本执行时读取；成功后被清理）
+    fs.writeFileSync(pendingPath, JSON.stringify({ zip: zipPath, appRoot, backup, ts }))
+    // 生成 detached 更新脚本
     // UTF-8 BOM：Windows PowerShell 5.1 需 BOM 才能正确解析含中文的 .ps1
     fs.writeFileSync(scriptPath, '\uFEFF' + buildUpdateScript({ zip: zipPath, appRoot, backup }), 'utf8')
+    // 清掉上次启动标记，便于本次握手确认
+    try { fs.unlinkSync(startedMarker) } catch { /* 不存在则忽略 */ }
+    _updLog(`update:apply 开始；pending=${pendingPath}`)
+    _updLog(`ps1=${scriptPath}`)
     // 优雅关闭后端（会一并停止引擎实例）
     try { await shutdownBackend() } catch { /* 后端可能已不在 */ }
-    // 启动独立更新进程（主进程退出后执行替换；防止删除运行中的程序文件）
+
+    // 启动独立更新进程：cmd /c start（ShellExecute 分离，脱离本进程生命周期）
+    // → powershell -File apply-*.ps1；绝对路径，不依赖工作目录。
+    const psExe = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    const cmdArgs = ['/c', 'start', '', '/min', psExe, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', scriptPath]
+    _updLog(`启动 updater 命令: cmd.exe ${cmdArgs.join(' ')}`)
     const child = spawn(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', scriptPath],
+      'cmd.exe',
+      cmdArgs,
       { detached: true, stdio: 'ignore', windowsHide: true }
     )
     child.unref()
-    // 退出主进程，解锁程序文件
+    child.on('error', (e) => _updLog(`cmd start 启动失败: ${e.message}`))
+    child.on('spawn', () => _updLog(`cmd start 已启动（pid=${child.pid || '?'}）`))
+
+    // 握手：等待 updater 真正启动（updater-started.log 出现），最多 8s，再退出主进程。
+    // 消除「spawn 后立即 app.exit(0)」导致子进程未及初始化就被终止的竞态。
+    const deadline = Date.now() + 8000
+    while (Date.now() < deadline) {
+      try {
+        if (fs.existsSync(startedMarker)) break
+      } catch { /* 忽略 */ }
+      await new Promise((r) => setTimeout(r, 200))
+    }
+    const started = fs.existsSync(startedMarker)
+    _updLog(`updater 启动确认: ${started ? 'YES（updater-started.log 已出现）' : 'NO（8s 内未出现，仍退出主进程以便诊断）'}`)
+    _updLog('Electron 准备退出')
     app.exit(0)
     return { ok: true, msg: '正在应用更新并重启…' }
   } catch (e) {
+    _updLog(`update:apply 异常: ${e.message}`)
     return { ok: false, msg: `应用更新失败：${e.message}` }
   }
 })

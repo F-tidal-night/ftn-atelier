@@ -455,6 +455,8 @@ async def update_download(payload: dict = None):
     return version_manager.update_download(
         asset_url=payload.get("asset_url"),
         expected_version=payload.get("expected_version"),
+        asset_size=payload.get("asset_size") or 0,
+        asset_sha256=payload.get("asset_sha256") or "",
     )
 
 

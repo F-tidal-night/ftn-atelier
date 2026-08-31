@@ -881,6 +881,8 @@ function SelfCheckSettings({ config, update }) {
       onError: (err) => setUpdating({ pct: 0, msg: err, error: true }),
       assetUrl: latestInfo?.asset?.url,
       expectedVersion: latestInfo?.latest,
+      assetSize: latestInfo?.asset?.size,
+      assetSha256: latestInfo?.asset?.sha256,
     })
   }
 

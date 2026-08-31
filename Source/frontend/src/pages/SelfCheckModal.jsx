@@ -136,6 +136,8 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
       onError: (err) => setUpdating({ pct: 0, msg: err, error: true }),
       assetUrl: updateInfo?.asset?.url,
       expectedVersion: updateInfo?.latest,
+      assetSize: updateInfo?.asset?.size,
+      assetSha256: updateInfo?.asset?.sha256,
     })
   }
   const okCount = items.filter((i) => i.status === 'ok').length

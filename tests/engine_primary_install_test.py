@@ -203,7 +203,7 @@ def main():
 
         orig_urlopen = urllib.request.urlopen
         orig_check_output = subprocess.check_output
-        import core.mirrors as mirrors_mod
+        from core.update import source_manager as mirrors_mod
         orig_prefix = mirrors_mod.configured_prefix
         calls = []
 

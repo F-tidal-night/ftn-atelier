@@ -9,7 +9,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "Source", "backend")))
 
-from core import mirrors  # noqa: E402
+from core.update import source_manager as mirrors  # noqa: E402
 
 
 def main():
