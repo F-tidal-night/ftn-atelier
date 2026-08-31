@@ -61,6 +61,8 @@ class Runner:
         self.status = EngineStatus.STOPPED
         self.process = None         # subprocess.Popen
         self.pid = None
+        self._start_token = 0       # 启动代际令牌：旧 _wait_ready 线程据此识别过期并退出
+        self._demo_start = None     # 实例级演示启动时间（避免命中类属性）
         self.log_path = None        # webui 输出日志文件
         self._log_fh = None
         self._log_reader = None
@@ -327,6 +329,8 @@ class Runner:
                 return self._start_extra(engine_key)
             self.status = EngineStatus.STARTING
             self._stop_event.clear()
+            self._start_token += 1
+            token = self._start_token
 
         cmd, is_demo, kind, port, root = self._resolve_launch(engine_key)
         self._demo = is_demo
@@ -398,7 +402,7 @@ class Runner:
 
         # 启动日志读取线程 + 就绪探测线程
         self._start_log_reader()
-        threading.Thread(target=self._wait_ready, daemon=True).start()
+        threading.Thread(target=self._wait_ready, args=(token,), daemon=True).start()
 
         return {
             "ok": True,
@@ -1175,26 +1179,45 @@ class Runner:
     # =================================================
     # 就绪探测（starting → running）
     # =================================================
-    def _wait_ready(self):
-        """轮询探测引擎就绪；演示模式下延迟数秒模拟启动。"""
+    def _wait_ready(self, token=None):
+        """轮询探测引擎就绪；演示模式下延迟数秒模拟启动。
+
+        token 为启动代际令牌：每次主引擎 start() 都会递增。旧引擎的
+        _wait_ready 线程（可能因竞态晚醒）发现令牌不匹配时必须立即退出，
+        绝不能碰新实例的 self.process / self.pid / self.status。
+        """
         # 端口从 ready_url 解析（兼容 tag 库端口偏移）
         port = 7860
         try:
             port = int(self.ready_url.rsplit(":", 1)[1].rstrip("/")) if self.ready_url else 7860
         except Exception:
             pass
+
+        def _stale():
+            if token is None:
+                return False
+            with self._lock:
+                return token != self._start_token
+
         ready = False
         deadline = time.time() + 120
         while time.time() < deadline and not self._stop_event.is_set():
+            if _stale():
+                return
             # 进程是否意外退出
             if self.process and self.process.poll() is not None:
                 code = self.process.poll()
+                if _stale():
+                    return
                 self._diagnosis = diagnose_log_file(self.log_path) if self.log_path else []
                 log_manager.warn("runner", f"引擎进程提前退出 (exit={code})")
                 for d in self._diagnosis:
                     log_manager.warn("runner", f"诊断[{d['title']}]: {d['suggestion']}")
-                if self.pid:
-                    self._kill_tree(self.pid)
+                my_pid = self.pid
+                if my_pid and not _stale():
+                    self._kill_tree(my_pid)
+                if _stale():
+                    return
                 self._finalize_stop()
                 return
             if self._check_ready(port):
@@ -1203,6 +1226,8 @@ class Runner:
             time.sleep(2)
 
         with self._lock:
+            if _stale():
+                return
             if self.status != EngineStatus.STARTING:
                 return
             if ready:
@@ -1239,7 +1264,6 @@ class Runner:
     # =================================================
     # 日志捕获
     # =================================================
-    _demo_start = None
 
     def _open_log(self):
         import os

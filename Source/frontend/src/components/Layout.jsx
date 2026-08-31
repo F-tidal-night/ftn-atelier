@@ -26,7 +26,7 @@ const NAV_ITEMS = [
  */
 export default function Layout({ active, onNavigate, children }) {
   const { ambientEffect, windowActive } = useApp()
-  const [ver, setVer] = useState('1.0.0')
+  const [ver, setVer] = useState('')
   useEffect(() => {
     let alive = true
     window.ftn?.getAppInfo?.().then((r) => { if (alive && r?.version) setVer(r.version) }).catch(() => {})

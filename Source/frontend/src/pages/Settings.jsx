@@ -841,7 +841,7 @@ function SelfCheckSettings({ config, update }) {
   const [checkingUpd, setCheckingUpd] = useState(false)
   const [latestInfo, setLatestInfo] = useState(null)   // 检测到的最新版本信息（含资产）
   const [updating, setUpdating] = useState(null)       // {pct, msg, error?} 全屏更新遮罩
-  const [ver, setVer] = useState('1.0.0')
+  const [ver, setVer] = useState('')
 
   useEffect(() => {
     let alive = true

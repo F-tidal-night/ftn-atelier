@@ -65,6 +65,13 @@ async function main() {
   await app.whenReady()
   bl('app ready')
 
+  // 0. 清理上次异常退出可能残留的孤儿后端/引擎进程（防硬杀后端口被残留进程占用）
+  try {
+    await forceCleanupOrphan()
+  } catch (err) {
+    console.error('[FTN] 启动前清理孤儿进程出错:', err.message)
+  }
+
   // 1. 拉起/连接后端
   try {
     bl('ensureBackendUp...')
