@@ -104,7 +104,8 @@ class EngineRegistry:
             root = paths.extra.get(a["key"], "") or ""
             entry = entry_overrides.get(a["key"]) or (self._detect_entry(a["kind"], root) if root else "")
             entries.append({
-                "key": a["key"], "label": a.get("label", a["key"]),
+                "key": a["key"],
+                "label": custom.get("renamed", {}).get(a["key"], a.get("label", a["key"])),
                 "default_label": a["key"], "kind": a.get("kind", "webui"),
                 "primary": a["key"] == pk, "multi": self._multi_override(a["key"], a.get("multi", False)),
                 "desc": a.get("desc", ""),

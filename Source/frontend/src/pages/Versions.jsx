@@ -475,6 +475,9 @@ export default function Versions() {
                     {rows.map((v) => (
                       <VersionRow key={v.id} v={v} isActive={v.active}
                         onSwitch={switchVersion}
+                        onUpdatePick={openUpdatePick} onRollbackPick={openRollbackPick}
+                        onTakeover={takeoverExternal} onBind={bindExternal} onEnvCheck={doEnvCheck}
+                        busy={!!opTask}
                         mode="other" primaryLabel={data.primary_label} />
                     ))}
                   </div>
@@ -704,55 +707,69 @@ function VersionRow({ v, isActive, onSwitch, onUpdatePick, onRollbackPick, onTak
       <div className="text-sm text-txt-muted shrink-0">{v.size > 0 ? fmtSize(v.size) : ''}</div>
       {isActive ? (
         <div className="shrink-0 flex items-center gap-2">
-          {mode === 'primary' && (
-            isExternal ? (
-              <>
-                <button
-                  onClick={() => onBind && onBind(v.id)}
-                  disabled={busy}
-                  className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
-                  title="外部 ZIP 没有 .git，无法自动识别版本；可手动绑定来源 commit/tag（仅作展示）"
-                >{v.user_bound ? '重新绑定版本' : '绑定版本'}</button>
-                <button
-                  onClick={() => onTakeover(v.id)}
-                  disabled={busy}
-                  className="px-3 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft disabled:opacity-40"
-                  title="备份用户数据 → 安装最新版 → 由 Atelier 管理更新"
-                >接管为 Atelier 管理</button>
-                <button
-                  onClick={() => onEnvCheck && onEnvCheck(v.id)}
-                  disabled={busy}
-                  className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
-                  title="检查虚拟环境、PyTorch、依赖与 numpy 对齐；发现问题可一键修复"
-                >检查环境</button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => onUpdatePick(v.id)}
-                  disabled={busy}
-                  className="px-3 py-2 rounded-lg border text-sm font-medium border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-40"
-                >↑ 选择新版</button>
-                <button
-                  onClick={() => onRollbackPick(v.id)}
-                  disabled={busy}
-                  className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
-                >↶ 选择回退</button>
-                <button
-                  onClick={() => onEnvCheck && onEnvCheck(v.id)}
-                  disabled={busy}
-                  className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
-                  title="检查虚拟环境、PyTorch、依赖与 numpy 对齐；发现问题可一键修复"
-                >检查环境</button>
-              </>
-            )
+          {isExternal ? (
+            <>
+              <button
+                onClick={() => onBind && onBind(v.id)}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
+                title="外部 ZIP 没有 .git，无法自动识别版本；可手动绑定来源 commit/tag（仅作展示）"
+              >{v.user_bound ? '重新绑定版本' : '绑定版本'}</button>
+              <button
+                onClick={() => onTakeover(v.id)}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft disabled:opacity-40"
+                title="备份用户数据 → 安装最新版 → 由 Atelier 管理更新"
+              >接管为 Atelier 管理</button>
+              <button
+                onClick={() => onEnvCheck && onEnvCheck(v.id)}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
+                title="检查虚拟环境、PyTorch、依赖与 numpy 对齐；发现问题可一键修复"
+              >检查环境</button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => onUpdatePick(v.id)}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg border text-sm font-medium border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-40"
+              >↑ 选择新版</button>
+              <button
+                onClick={() => onRollbackPick(v.id)}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
+              >↶ 选择回退</button>
+              <button
+                onClick={() => onEnvCheck && onEnvCheck(v.id)}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
+                title="检查虚拟环境、PyTorch、依赖与 numpy 对齐；发现问题可一键修复"
+              >检查环境</button>
+            </>
           )}
         </div>
       ) : (
-        <button
-          onClick={() => onSwitch(v.id)}
-          className="shrink-0 px-4 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft"
-        >切换至此</button>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            onClick={() => onSwitch(v.id)}
+            className="px-4 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft"
+          >切换至此</button>
+          {isExternal && (
+            <>
+              <button
+                onClick={() => onBind && onBind(v.id)}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg border text-sm font-medium border-base-border hover:bg-base-surface-2 disabled:opacity-40"
+              >{v.user_bound ? '重新绑定版本' : '绑定版本'}</button>
+              <button
+                onClick={() => onTakeover(v.id)}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg border text-sm font-medium border-accent/40 text-accent hover:bg-accent-soft disabled:opacity-40"
+              >接管为 Atelier 管理</button>
+            </>
+          )}
+        </div>
       )}
     </div>
   )

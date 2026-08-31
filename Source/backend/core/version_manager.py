@@ -473,56 +473,65 @@ class VersionManager:
             for b in base_registry.defs():
                 rows = self._scan_path_for_base(b["key"])
                 groups[b["key"]] = rows
-            # 主引擎配置了外部根目录（不在 Core/Engines 下）→ 识别为已装实例
-            if not any(groups.values()):
-                ext = self._external_primary()
-                if ext:
+            # 注册过的外部引擎根目录（主引擎 + 用户自建，不在 Core/Engines 下）→ 也识别为已装实例；
+            # 基底按目录实际内容推断（reForge/Forge 用目录名+源码品牌），绝不盲目跟主基底。
+            seen = {r.get("path") for rows in groups.values() for r in rows}
+            for ext in self._external_engines():
+                if ext and ext["path"] not in seen:
                     groups.setdefault(ext["base"], []).append(ext)
+                    seen.add(ext["path"])
         # 每个基底内部：新旧排序
         for k, rows in groups.items():
             rows.sort(key=lambda r: self._ver_key(r["version"]), reverse=True)
         return groups
 
-    def _external_primary(self):
-        """主引擎指向 Core/Engines 之外的现有安装（如官方 git 版）时，识别为已装实例。"""
+    def _external_engines(self):
+        """注册过的、根目录在 Core/Engines 之外的引擎（主引擎或用户自建）→ 已装实例行。
+
+        基底按目录实际内容推断（base_registry.infer，目录名 + 源码品牌），
+        推断不出才回退到当前主基底；绝不因为主基底是 forge 就把 reForge 误判成 forge。
+        """
+        out = []
         try:
             from core.engine_registry import engine_registry
-            primary = engine_registry.primary_engine()
-            if not primary or not primary.get("root"):
-                return None
-            root = primary["root"]
-            if not os.path.isdir(root):
-                return None
-            base = base_registry.primary()
-            base_dir = os.path.join(ENGINES_ROOT, base)
-            if os.path.isdir(base_dir) and any(
-                os.path.isdir(os.path.join(base_dir, n)) for n in os.listdir(base_dir)
-            ):
-                return None  # Core/Engines 下已有实例，不算外部
-            info = self._read_version(root)
-            return {
-                "id": root,
-                "name": info["dir_name"] or os.path.basename(root.rstrip("/\\")),
-                "version": info["version"],
-                "git_tag": info["git_tag"],
-                "git_commit": info["git_commit"],
-                "git_branch": info["git_branch"],
-                "install_source": info["install_source"],
-                "branch": info["branch"],
-                "path": root,
-                # 外部引擎目录可能几十 GB，不做全量遍历（体积显示为 0）
-                "size": 0,
-                "dir_name": info["dir_name"],
-                "install_path": root,
-                "repository": _repo_of(base),
-                "engine_name": base_registry.labels().get(base, base),
-                "base": base,
-                "external": True,
-                "updated_time": os.path.getmtime(root),
-            }
+            seen = set()
+            for eng in engine_registry.list_engines():
+                root = (eng or {}).get("root") or ""
+                if not root or not os.path.isdir(root) or root in seen:
+                    continue
+                seen.add(root)
+                # 根目录在 Core/Engines 之内的，已由 _scan_path_for_base 覆盖，跳过
+                try:
+                    rel = os.path.relpath(root, ENGINES_ROOT)
+                    if rel != "." and not rel.startswith(".."):
+                        continue
+                except Exception:
+                    pass
+                base = base_registry.infer(root) or base_registry.primary()
+                info = self._read_version(root)
+                out.append({
+                    "id": root,
+                    "name": info["dir_name"] or os.path.basename(root.rstrip("/\\")),
+                    "version": info["version"],
+                    "git_tag": info["git_tag"],
+                    "git_commit": info["git_commit"],
+                    "git_branch": info["git_branch"],
+                    "install_source": info["install_source"],
+                    "branch": info["branch"],
+                    "path": root,
+                    # 外部引擎目录可能几十 GB，不做全量遍历（体积显示为 0）
+                    "size": 0,
+                    "dir_name": info["dir_name"],
+                    "install_path": root,
+                    "repository": _repo_of(base),
+                    "engine_name": base_registry.labels().get(base, base),
+                    "base": base,
+                    "external": True,
+                    "updated_time": os.path.getmtime(root),
+                })
         except Exception as e:
-            log_manager.warn("version", f"外部主引擎识别失败: {e}")
-            return None
+            log_manager.warn("version", f"外部引擎识别失败: {e}")
+        return out
 
     def _ver_key(self, v):
         m = re.findall(r"\d+", v)
@@ -587,6 +596,13 @@ class VersionManager:
         self._annotate_active(groups)
 
         primary = base_registry.primary()
+        cur = self.current()
+        # 横幅显示「当前主引擎」应为实际在用引擎的基底（外部引擎可能与其基底分组不同，
+        # 不盲目跟随配置的主基底——例如主基底是 forge、实际用的是外部 reForge）
+        primary_label = base_registry.labels().get(
+            (cur or {}).get("base") or primary,
+            base_registry.labels().get(primary, primary),
+        )
         defs = base_registry.defs()
         bases = []
         for d in defs:
@@ -608,9 +624,9 @@ class VersionManager:
             "demo": self.is_demo,
             "engines_root": ENGINES_ROOT,
             "primary_base": primary,
-            "primary_label": base_registry.labels().get(primary, primary),
+            "primary_label": primary_label,
             "bases": bases,
-            "current": self.current(),
+            "current": cur,
         }
 
     # =================================================

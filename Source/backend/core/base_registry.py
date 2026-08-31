@@ -130,6 +130,27 @@ class BaseRegistry:
     }
     SUPPORTED_FAMILIES = ("reforge", "forge")
 
+    @staticmethod
+    def _reforge_content_marker(root):
+        """reForge 与 Forge 结构同源（都有 modules_forge / webui.bat），
+        靠源码品牌字符串区分：reForge 的 modules_forge/ldm_patched 源码含 "reforge"，
+        Forge 不含。仅读少量小文件，绝不遍历模型/venv。"""
+        for rel in (
+            "modules_forge/initialization.py",
+            "modules_forge/config.py",
+            "ldm_patched/modules/args_parser.py",
+        ):
+            p = os.path.join(root, rel)
+            if os.path.isfile(p):
+                try:
+                    with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                        head = f.read(16384)
+                    if "reforge" in head.lower():
+                        return True
+                except Exception:
+                    pass
+        return False
+
     def family_of(self, root):
         """识别引擎家族：reforge / forge / comfyui / a1111 / unknown（空路径返回空）。
 
@@ -145,9 +166,9 @@ class BaseRegistry:
             return "forge"
         if "comfy" in base or os.path.isdir(os.path.join(root, "comfy")):
             return "comfyui"
-        # Forge / reForge 特有结构（A1111 没有 modules_forge）
+        # Forge / reForge 特有结构（A1111 没有 modules_forge）：用内容品牌区分
         if os.path.isdir(os.path.join(root, "modules_forge")):
-            return "forge"
+            return "reforge" if self._reforge_content_marker(root) else "forge"
         # A1111 骨架：launch.py + modules + webui.py
         if (os.path.exists(os.path.join(root, "launch.py"))
                 and os.path.isdir(os.path.join(root, "modules"))
@@ -171,12 +192,15 @@ class BaseRegistry:
             return "reforge"
         if "webui-forge" in base or base.endswith("forge"):
             return "forge"
-        # 2) 其余：先按入口骨架探测
+        # 2) Forge 家族结构（modules_forge）：目录名不含关键词时用源码品牌区分
+        if os.path.isdir(os.path.join(root, "modules_forge")):
+            return "reforge" if self._reforge_content_marker(root) else "forge"
+        # 3) 其余：先按入口骨架探测
         for key in _BASE_ORDER:
             for m in _BASE_DEFS[key]["markers"]:
                 if os.path.exists(os.path.join(root, m)):
                     return key
-        # 3) 目录名含基底关键词
+        # 4) 目录名含基底关键词
         keywords = {
             "reforge": ["reforge"],
             "forge": ["forge", "webui-forge"],

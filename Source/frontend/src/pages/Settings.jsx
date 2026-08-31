@@ -449,6 +449,11 @@ function QuickFolders() {
   }
   // 「重新检测」：清空自定义路径，回退到按主引擎自动检测
   const resetDetect = (f) => save(folders.map((x) => x.key === f.key ? { ...x, custom_path: '' } : x))
+  // 删除自建快捷文件夹（默认 5 项不可删）
+  const doRemoveFolder = async (f) => {
+    if (!window.confirm(`确定删除快捷文件夹「${f.label}」？`)) return
+    save(folders.filter((x) => x.key !== f.key))
+  }
   // 新增自定义文件夹（自定义路径手动指定，不走自动检测）
   const doAdd = async () => {
     const label = newLabel.trim()
@@ -513,6 +518,9 @@ function QuickFolders() {
               <button onClick={() => browsePath(f)} className="px-3 py-2 rounded-lg border border-base-border text-xs hover:bg-base-surface-2 shrink-0">更改路径</button>
               {isDefault && (
                 <button onClick={() => resetDetect(f)} className="px-3 py-2 rounded-lg border border-base-border text-xs hover:bg-base-surface-2 shrink-0">重新检测</button>
+              )}
+              {!isDefault && (
+                <button onClick={() => doRemoveFolder(f)} className="px-3 py-2 rounded-lg border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10 shrink-0">删除</button>
               )}
             </div>
             {f.custom_path && <p className="mt-1.5 text-[11px] text-txt-muted">已手动指定路径，主引擎切换不会影响此项。可点「重新检测」回退到自动检测。</p>}

@@ -615,7 +615,7 @@ async def quick_folders_update(payload: dict):
     conf = config_manager.load()
     conf.home_folders = folders
     config_manager.save(conf)
-    return {"ok": True, "folders": config_manager.quick_folders(engine_registry)}
+    return {"ok": True, **config_manager.quick_folders(engine_registry)}
 
 
 # ============================================
