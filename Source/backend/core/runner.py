@@ -61,6 +61,7 @@ class Runner:
         self.status = EngineStatus.STOPPED
         self.process = None         # subprocess.Popen
         self.pid = None
+        self._kind = "webui"        # 当前主实例类型（webui / batdir / ftn_tag / exe）
         self._start_token = 0       # 启动代际令牌：旧 _wait_ready 线程据此识别过期并退出
         self._demo_start = None     # 实例级演示启动时间（避免命中类属性）
         self.log_path = None        # webui 输出日志文件
@@ -213,15 +214,6 @@ class Runner:
         """根据引擎 key 解析启动命令。返回 (commands, is_demo, kind, port, root)。"""
         conf = config_manager.load()
 
-        # tag 库：启动前端静态服务（轻量，不占互斥锁）
-        if engine_key == "tag":
-            root = conf.engine_paths.tag_db
-            if root and os.path.isdir(root):
-                port = conf.start_args.port + 1
-                return ([sys.executable, "-m", "http.server", str(port), "--directory", root],
-                        False, "tag", port, root)
-            return self._build_demo_cmd(conf, engine_key), True, "webui", conf.start_args.port, None
-
         # 通用引擎：从引擎注册表解析根目录 / 类型 / 入口（含用户新增的自定义引擎）
         from core.engine_registry import engine_registry
         edef = next((e for e in engine_registry.list_engines() if e.get("key") == engine_key), None)
@@ -233,7 +225,8 @@ class Runner:
         if entry:
             log_manager.info("runner", f"[{engine_key}] 启动入口: {entry}")
             cmd = self._build_engine_cmd(engine_key, entry, conf, kind)
-            return cmd, False, kind, conf.start_args.port, root_field
+            port = 0 if kind == "exe" else conf.start_args.port
+            return cmd, False, kind, port, root_field
 
         # 无真实环境：演示模式
         log_manager.warn("runner", f"[{engine_key}] 未检测到有效根目录，进入演示模式")
@@ -242,6 +235,9 @@ class Runner:
     def _build_engine_cmd(self, engine_key, entry, conf, kind="webui"):
         """按引擎类型构建启动命令。"""
         args = conf.start_args
+        if kind == "exe":
+            # 本地程序：直接拉起 exe（无端口、无参数）
+            return [entry]
         if entry.lower().endswith(".bat"):
             return ["cmd", "/c", entry]
         if entry.lower().endswith(".py"):
@@ -339,6 +335,7 @@ class Runner:
                 self.status = EngineStatus.STOPPED
             return {"ok": False, "code": "local_html", "msg": "本地 HTML 工具无需启动进程：请在首页点击「启动」在浏览器中打开"}
         self._demo = is_demo
+        self._kind = kind
         self.engine_key = engine_key
         first_run = self._is_first_run(root, kind)
         if first_run:
@@ -370,7 +367,8 @@ class Runner:
                 "status": self.status,
             }
         start_args_port = getattr(config_manager.load().start_args, "port", 7860)
-        self.ready_url = f"http://127.0.0.1:{port or start_args_port}"
+        # EXE 本地程序无端口：ready_url 置空，避免首页误显示端口
+        self.ready_url = "" if kind == "exe" else f"http://127.0.0.1:{port or start_args_port}"
 
         log_manager.info("runner", f"正在启动引擎 [{engine_key}] {'(演示模式)' if is_demo else ''} ...")
         log_manager.info("runner", f"启动命令: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
@@ -403,7 +401,9 @@ class Runner:
 
         self.pid = self.process.pid
         log_manager.info("runner", f"引擎进程已启动 (pid={self.pid})")
-        self._register_engine(self.pid, engine_key, 1, root, "")
+        # EXE 本地程序不做进程标记：退出/异常清理都不会误杀（用户期望它继续运行）
+        if kind != "exe":
+            self._register_engine(self.pid, engine_key, 1, root, "")
 
         # 启动日志读取线程 + 就绪探测线程
         self._start_log_reader()
@@ -482,7 +482,7 @@ class Runner:
             "key": engine_key, "label": label, "num": num,
             "pid": None, "process": None, "log_path": log_path,
             "log_source": log_source, "status": "starting",
-            "ready_url": f"http://127.0.0.1:{port}",
+            "ready_url": "" if kind == "exe" else f"http://127.0.0.1:{port}",
             "demo": is_demo, "_log_fh": None, "_demo_start": None,
         }
         log_manager.info(
@@ -521,7 +521,8 @@ class Runner:
         with self._lock:
             self._extras.append(inst)
         log_manager.info("runner", f"多开实例已启动 [{engine_key}#{num}] pid={inst['pid']}")
-        self._register_engine(inst["pid"], engine_key, num, root, "")
+        if kind != "exe":
+            self._register_engine(inst["pid"], engine_key, num, root, "")
         threading.Thread(target=self._tail_instance, args=(inst,), daemon=True).start()
         threading.Thread(target=self._wait_extra, args=(inst,), daemon=True).start()
         return {
@@ -540,6 +541,20 @@ class Runner:
             with self._lock:
                 alive = inst in self._extras
             if not alive:
+                break
+            # 活跃检测：运行中实例进程自行退出（例如被手动关闭）→ 整树清理并移除
+            proc = inst.get("process")
+            if proc and proc.poll() is not None and inst.get("status") == "running":
+                code = proc.poll()
+                log_manager.warn("runner", f"[{inst['key']}#{inst['num']}] 实例进程已退出 (exit={code})（可能被手动关闭）")
+                if inst.get("pid"):
+                    self._kill_tree(inst["pid"])
+                self._remove_extra(inst, code)
+                try:
+                    import asyncio
+                    asyncio.run(status_manager.broadcast_status())
+                except Exception:
+                    pass
                 break
             try:
                 with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -613,7 +628,8 @@ class Runner:
         if proc is None or proc.poll() is not None:
             return
         try:
-            if inst.get("demo"):
+            if inst.get("demo") or inst.get("kind") == "exe":
+                # EXE 本地程序：无 /shutdown 接口，直接终止
                 proc.terminate()
             else:
                 port = None
@@ -664,10 +680,15 @@ class Runner:
         return {"ok": True, "engine": engine_key, "stopped": stopped}
 
     def stop_all(self):
-        """停止全部引擎实例（主实例 + 所有多开），供退出/关闭前调用。"""
+        """停止全部引擎实例（主实例 + 所有多开），供退出/关闭前调用。
+        EXE 本地程序不在此停止：关闭 FTN Atelier 不会关闭它们（退出时仅提示）。
+        """
         with self._lock:
-            primary_running = self.status in (EngineStatus.RUNNING, EngineStatus.STARTING)
-            keys = sorted({x["key"] for x in self._extras})
+            primary_running = (
+                self.status in (EngineStatus.RUNNING, EngineStatus.STARTING)
+                and self._kind != "exe"
+            )
+            keys = sorted({x["key"] for x in self._extras if x.get("kind") != "exe"})
         results = []
         if primary_running:
             results.append(self._stop_primary())
@@ -687,6 +708,7 @@ class Runner:
                     pass
                 out.append({
                     "engine": self.engine_key,
+                    "kind": self._kind,
                     "label": self._engine_label(self.engine_key),
                     "instance": 1,
                     "pid": self.pid,
@@ -704,6 +726,7 @@ class Runner:
                     pass
                 out.append({
                     "engine": x["key"],
+                    "kind": x.get("kind"),
                     "label": x.get("label") or self._engine_label(x["key"]),
                     "instance": x["num"],
                     "pid": x.get("pid"),
@@ -939,7 +962,8 @@ class Runner:
         try:
             # 演示模式直接终止；真实模式尝试优雅关闭
             if self.process and self.process.poll() is None:
-                if self._demo:
+                if self._demo or self._kind == "exe":
+                    # EXE 本地程序：无 /shutdown 接口，直接终止
                     self.process.terminate()
                 else:
                     self._graceful_stop(self.process, port=self._instance_port())
@@ -1180,6 +1204,7 @@ class Runner:
             self.pid = None
             self.process = None
             self._reveal_log()
+        self._stop_event.set()  # 停止日志/就绪线程的循环
         self._unregister_engine(pid)
         log_manager.info("runner", "引擎已停止")
         return {"ok": True, "status": EngineStatus.STOPPED}
@@ -1261,6 +1286,9 @@ class Runner:
             return (self.process is not None
                     and self.process.poll() is None
                     and time.time() > (self._demo_start or 0) + 4)
+        # EXE 本地程序：进程存活即视为就绪（无端口可探测）
+        if self._kind == "exe":
+            return self.process is not None and self.process.poll() is None
         try:
             urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/", timeout=2
@@ -1292,6 +1320,21 @@ class Runner:
             return
         pos = 0
         while not self._stop_event.is_set():
+            # 活跃检测：运行中主实例进程自行退出（例如被手动关闭）→ 标记停止并整树清理
+            with self._lock:
+                running = self.status == EngineStatus.RUNNING
+            if running and self.process and self.process.poll() is not None:
+                code = self.process.poll()
+                log_manager.warn("runner", f"引擎进程已退出 (exit={code})（可能被手动关闭）")
+                if self.pid:
+                    self._kill_tree(self.pid)
+                self._finalize_stop()
+                try:
+                    import asyncio
+                    asyncio.run(status_manager.broadcast_status())
+                except Exception:
+                    pass
+                return
             try:
                 with open(self.log_path, "r", encoding="utf-8", errors="replace") as f:
                     f.seek(pos)

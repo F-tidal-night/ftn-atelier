@@ -140,6 +140,7 @@ export const backendApi = {
   enginesList: () => api.get('/api/engines'),
   enginesAdd: (payload) => api.post('/api/engines', payload),
   enginesDetect: (payload) => api.post('/api/engines/detect', payload),
+  changelog: () => api.get('/api/changelog'),
   enginesRemove: (key) => api.delete(`/api/engines/${key}`),
   enginesRename: (key, label) => api.post(`/api/engines/${key}/rename`, { label }),
   enginesSetPath: (key, root) => api.post(`/api/engines/${key}/path`, { root }),

@@ -220,6 +220,37 @@ class EngineRegistry:
                             return os.path.join(root, fn)
                 except Exception:
                     pass
+            elif kind == "exe":
+                # 本地程序：顶层 .exe，无则一级子目录兜底；
+                # 优先与目录同名的主程序，其次体积最大，最后第一个
+                cands = []
+                try:
+                    for fn in os.listdir(root):
+                        if fn.lower().endswith(".exe"):
+                            p = os.path.join(root, fn)
+                            if os.path.isfile(p):
+                                cands.append(p)
+                    if not cands:
+                        for sub in os.listdir(root):
+                            subp = os.path.join(root, sub)
+                            if os.path.isdir(subp):
+                                for fn in os.listdir(subp):
+                                    if fn.lower().endswith(".exe"):
+                                        p = os.path.join(subp, fn)
+                                        if os.path.isfile(p):
+                                            cands.append(p)
+                except Exception:
+                    pass
+                if not cands:
+                    return ""
+                base = os.path.basename(root).strip().lower()
+                same = [p for p in cands if os.path.splitext(os.path.basename(p))[0].lower() in (base, base.split("-")[0], base.split("_")[0])]
+                if same:
+                    return same[0]
+                try:
+                    return max(cands, key=lambda p: os.path.getsize(p))
+                except Exception:
+                    return cands[0]
         except Exception:
             pass
         return ""
@@ -245,11 +276,14 @@ class EngineRegistry:
                 kind = "webui" if ename in ("webui.bat", "webui-user.bat") else "batdir"
             elif ename.endswith((".html", ".htm")) or ename in ("启动.bat",):
                 kind = "ftn_tag"
+            elif ename.endswith(".exe"):
+                kind = "exe"
             else:
                 entry = ""  # 未知文件类型：回退到按目录探测
         if not entry or not kind:
-            # 顺序：webui → html（无 cmd 窗，优先于 bat 兜底，避免 html 工具被误判成 bat）→ batdir
-            for k in ("webui", "ftn_tag", "batdir"):
+            # 顺序：webui → exe → html → batdir
+            # （exe 应用目录常含 html 文档，必须 exe 优先；html/exe 都优先于 bat 兜底）
+            for k in ("webui", "exe", "ftn_tag", "batdir"):
                 e = self._detect_entry(k, root)
                 if e:
                     kind, entry = k, e
@@ -266,7 +300,7 @@ class EngineRegistry:
             "root": root,
             "entry": entry,
             "kind": kind,
-            "kind_label": {"webui": "WebUI 引擎", "batdir": "启动脚本", "ftn_tag": "Tag 库"}.get(kind, kind),
+            "kind_label": {"webui": "WebUI 引擎", "batdir": "启动脚本", "ftn_tag": "HTML 工具", "exe": "本地程序 (EXE)"}.get(kind, kind),
             "family": family,
             "family_label": base_registry.FAMILY_LABELS.get(family, family or "未知"),
         }

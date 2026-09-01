@@ -59,7 +59,7 @@ export default function Versions() {
   const togglePlugin = async (key, enabled) => {
     const r = await backendApi.pluginSetEnabled(key, enabled)
     if (r.ok) {
-      setPlugMsg({ type: 'ok', text: `已${enabled ? '启用' : '禁用'}插件 ${key}` })
+      setPlugMsg({ type: 'ok', text: r.msg || `已${enabled ? '启用' : '禁用'}插件 ${key}` })
       const res = await backendApi.pluginsList()
       setPlugs(res?.plugs || [])
     } else {
@@ -772,7 +772,7 @@ function PluginManage({ plugs, unsupported, plugMsg, onToggle, onOpenDir, onUpda
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className="font-semibold text-txt-secondary">插件管理</h2>
-          <p className="text-xs text-txt-muted mt-0.5">浏览并开关当前主引擎已安装的插件（来自主引擎 extensions 目录）</p>
+          <p className="text-xs text-txt-muted mt-0.5">浏览并开关当前主引擎已安装的插件（写入引擎配置，重启引擎后生效）</p>
         </div>
         <div className="flex gap-2">
           <button onClick={onUpdateAll} disabled={task?.status === 'running'}

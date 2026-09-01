@@ -30,7 +30,7 @@ from core.models.app_config import AppConfig
 from core.env_detect import env_detect
 
 # FTN Atelier 应用版本（与前端 package.json version 保持一致）
-FTN_APP_VERSION = "1.0.3"
+FTN_APP_VERSION = "1.0.4"
 
 # 需要校验完整性的一份标准目录（存在性 + 可创建）
 REQUIRED_DIRS = ["Core", os.path.join("Core", "Engines"), "Data", "Backup", "Logs", "Database"]

@@ -138,7 +138,7 @@ function TabBtn({ active, onClick, children }) {
 }
 
 // ============ 引擎路径（可编辑引擎） ============
-const KIND_LABEL = { webui: 'WebUI', batdir: '启动脚本', ftn_tag: 'Tag 库' }
+const KIND_LABEL = { webui: 'WebUI', batdir: '启动脚本', ftn_tag: 'HTML 工具', exe: '本地程序' }
 const FAMILY_LABEL = { reforge: 'reForge', forge: 'Forge', a1111: 'A1111', comfyui: 'ComfyUI', unknown: '未知类型', other: '脚本/工具' }
 const SUPPORTED_FAMILY = new Set(['reforge', 'forge'])
 function EnginePaths() {

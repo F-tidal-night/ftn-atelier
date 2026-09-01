@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import {
   IconHome, IconModels, IconDownload, IconVersions, IconTheme,
-  IconTool, IconLog, IconWidgets, IconSettings, IconAbout,
+  IconTool, IconLog, IconWidgets, IconSettings, IconAbout, IconChangelog,
 } from './icons'
 import AmbientLayer from '../pages/AmbientLayer'
 import { useApp } from '../state/AppContext'
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { key: 'console', label: '控制台', Icon: IconLog },
   { key: 'tools', label: '小工具', Icon: IconWidgets },
   { key: 'settings', label: '设置', Icon: IconSettings },
+  { key: 'changelog', label: '更新日志', Icon: IconChangelog },
   { key: 'about', label: '关于', Icon: IconAbout },
 ]
 

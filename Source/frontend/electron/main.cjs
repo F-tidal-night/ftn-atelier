@@ -166,13 +166,32 @@ function createWindow({ show = true } = {}) {
       return
     }
 
-    const count = Math.max(1, instances.length)
+    // 区分「会随应用停止的引擎」与「EXE 本地程序（退出不关闭）」
+    const exeCount = instances.filter((i) => i.kind === 'exe').length
+    const engCount = instances.length - exeCount
+    let msgTitle = '引擎仍在运行中'
+    let detail = ''
+    let buttons = []
+    if (engCount > 0 && exeCount > 0) {
+      detail = `当前有 ${engCount} 个引擎实例正在运行，关闭应用将先停止引擎进程。\n` +
+        `另有 ${exeCount} 个本地程序（EXE）运行中，关闭本程序不会一同关闭它们。是否继续？`
+      buttons = ['是，停止引擎并退出', '否，继续使用']
+    } else if (exeCount > 0) {
+      msgTitle = '本地程序仍在运行'
+      detail = `检测到 ${exeCount} 个本地程序（EXE）正在运行。\n` +
+        `关闭 FTN Atelier 不会关闭它们（将继续运行）。是否继续退出？`
+      buttons = ['是，退出', '否，取消']
+    } else {
+      const count = Math.max(1, instances.length)
+      detail = `当前有 ${count} 个引擎实例正在运行。关闭应用将先停止引擎进程。是否继续？`
+      buttons = ['是，停止引擎并退出', '否，继续使用']
+    }
     const choice = await dialog.showMessageBox(mainWindow, {
       type: 'warning',
       title: 'FTN Atelier',
-      message: '引擎仍在运行中',
-      detail: `当前有 ${count} 个引擎实例正在运行。关闭应用将先停止引擎进程。是否继续？`,
-      buttons: ['是，停止引擎并退出', '否，继续使用'],
+      message: msgTitle,
+      detail,
+      buttons,
       defaultId: 1,
       cancelId: 1,
       noLink: true,

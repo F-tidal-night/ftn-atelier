@@ -97,6 +97,16 @@ export function IconLog(props) {
   )
 }
 
+// 更新日志（文档 + 行）
+export function IconChangelog(props) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="3.5" width="16" height="17" rx="2" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+    </Svg>
+  )
+}
+
 // 版本（标签/分支）
 export function IconVersions(props) {
   return (
@@ -160,6 +170,7 @@ export default {
   about: IconAbout,
   engine: IconEngine,
   log: IconLog,
+  changelog: IconChangelog,
   theme: IconTheme,
   tool: IconTool,
   widgets: IconWidgets,

@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Models from './pages/Models'
 import Versions from './pages/Versions'
+import Changelog from './pages/Changelog'
 import Theme from './pages/Theme'
 import Troubleshoot from './pages/Troubleshoot'
 import Tools from './pages/Tools'
@@ -66,7 +67,7 @@ export default function App() {
 
   // 视图切换：仅已实现的页面可打开
   const handleNavigate = (key, sub) => {
-    if (['home', 'settings', 'models', 'versions', 'theme', 'troubleshoot', 'tools', 'console', 'downloads', 'about'].includes(key)) {
+    if (['home', 'settings', 'models', 'versions', 'theme', 'troubleshoot', 'tools', 'console', 'downloads', 'changelog', 'about'].includes(key)) {
       setView(key)
       if (key === 'settings') setSettingsTab(sub || null)
       if (key === 'console') setConsoleFocus(sub || null)
@@ -82,6 +83,7 @@ export default function App() {
     : view === 'tools' ? <Tools />
     : view === 'console' ? <ConsolePage initialFocus={consoleFocus} />
     : view === 'downloads' ? <Downloads onNavigate={handleNavigate} />
+    : view === 'changelog' ? <Changelog />
     : view === 'about' ? <About />
     : <Dashboard onNavigate={handleNavigate} />
 

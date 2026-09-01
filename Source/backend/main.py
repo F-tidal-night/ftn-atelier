@@ -753,6 +753,17 @@ async def engines_list():
     return engine_registry.list_engines()
 
 
+@app.get("/api/changelog")
+async def changelog():
+    """版本更新日志（随包分发，Source/backend/更新说明.md）。"""
+    try:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "更新说明.md")
+        with open(p, "r", encoding="utf-8") as f:
+            return {"ok": True, "content": f.read()}
+    except Exception as e:
+        return {"ok": False, "content": "", "error": str(e)}
+
+
 @app.post("/api/engines")
 async def engines_add(payload: dict):
     return engine_registry.add_engine(

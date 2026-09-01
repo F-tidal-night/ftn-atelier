@@ -90,9 +90,11 @@ export default function Dashboard({ onNavigate }) {
         if (r?.first_run) {
           setTip('首次启动：引擎将自动创建环境并安装依赖（已用国内镜像，需要联网，可能较久），进度请到控制台查看')
         }
-        // 启动成功 → 直达控制台对应会话 Tab
-        const focusId = r.instance && r.instance > 1 ? `engine:${key}:${r.instance}` : `engine:${key}`
-        if (onNavigate) onNavigate('console', focusId)
+        // 只有有 cmd 窗的引擎才直达控制台；html / exe 不跳（无会话）
+        if (eng?.kind !== 'ftn_tag' && eng?.kind !== 'exe') {
+          const focusId = r.instance && r.instance > 1 ? `engine:${key}:${r.instance}` : `engine:${key}`
+          if (onNavigate) onNavigate('console', focusId)
+        }
       }
       setTimeout(refresh, 300)
     }
@@ -120,6 +122,7 @@ export default function Dashboard({ onNavigate }) {
 
   const selEng = engines.find((e) => e.key === sel) || null
   const selIsHtml = selEng?.kind === 'ftn_tag'
+  const selIsExe = selEng?.kind === 'exe'
   // 无路径 → 启动按钮锁定
   const noEntry = !!selEng && !selEng.entry
 
@@ -249,7 +252,7 @@ export default function Dashboard({ onNavigate }) {
             <button onClick={mainAction} disabled={mainDisabled}
               className="flex-1 px-4 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-45 disabled:cursor-not-allowed"
               style={{ background: 'var(--color-accent)' }}>{mainLabel}</button>
-            {!selIsHtml && selEng?.entry && (
+            {!selIsHtml && !selIsExe && selEng?.entry && (
               <button onClick={restartEngine} disabled={!selRunning}
                 className="px-4 py-2.5 rounded-lg border text-sm font-medium disabled:opacity-40"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>重启</button>

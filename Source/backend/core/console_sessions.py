@@ -40,9 +40,8 @@ class ConsoleSessionManager:
     def _engine_sessions(self):
         """引擎进程会话：由 runner 全部实例实时合成。
 
-        仅「有 cmd 的引擎」进入控制台：启动方式为 webui.bat /
-        一键启动.bat / launch.py 等脚本的引擎；ftn_tag（html 工具）
-        无 cmd，不占会话。
+        仅「有 cmd 窗的引擎」进入控制台：bat / webui 脚本引擎；
+        html（ftn_tag）与本地程序（exe）无 cmd 窗，不占会话。
         """
         from core.runner import runner
         from core.engine_registry import engine_registry
@@ -59,8 +58,8 @@ class ConsoleSessionManager:
         out = []
         for x in insts:
             key = x.get("engine")
-            if kinds.get(key) == "ftn_tag":
-                continue  # html/tag 库无 cmd，不进控制台
+            if kinds.get(key) in ("ftn_tag", "exe"):
+                continue  # html / 本地 exe 无 cmd 窗，不进控制台
             num = x.get("instance") or 1
             label = x.get("label") or key
             out.append({

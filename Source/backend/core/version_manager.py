@@ -1312,7 +1312,36 @@ class VersionManager:
     # =================================================
     # 插件管理（当前实例 extensions 目录）
     # =================================================
-    PLUGIN_DISABLE_FILE = ".ftn_disabled"
+    # 引擎是否禁用插件，以引擎 config.json 的 disabled_extensions 为准
+    # （reForge / Forge 的 extensions.py 均按 shared.opts.disabled_extensions 判定）
+
+    def _plugin_config(self, engine_dir):
+        """读取引擎 config.json；返回 (cfg_dict, config_path)。"""
+        cfg_path = os.path.join(engine_dir, "config.json")
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            if not isinstance(cfg, dict):
+                cfg = {}
+        except Exception:
+            cfg = {}
+        return cfg, cfg_path
+
+    def _plugin_disabled_names(self, engine_dir):
+        cfg, _ = self._plugin_config(engine_dir)
+        dl = cfg.get("disabled_extensions") or []
+        if isinstance(dl, list):
+            return {str(x) for x in dl}
+        return set()
+
+    def _save_plugin_config(self, engine_dir, cfg):
+        cfg_path = os.path.join(engine_dir, "config.json")
+        try:
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception:
+            return False
 
     def plugins(self):
         """列出当前实例 extensions 目录下的插件（含 git 来源去重标记）。"""
@@ -1327,7 +1356,7 @@ class VersionManager:
                 d = os.path.join(ext_dir, name)
                 if not os.path.isdir(d) or name.startswith("."):
                     continue
-                disabled = os.path.exists(os.path.join(d, self.PLUGIN_DISABLE_FILE))
+                disabled = name in self._plugin_disabled_names(cur["path"])
                 remote = ""
                 if os.path.exists(os.path.join(d, ".git")):
                     ok, out = _exec_git_quiet(["remote", "get-url", "origin"], d)
@@ -1388,17 +1417,24 @@ class VersionManager:
                 break
         if not target:
             return {"ok": False, "msg": f"插件不存在: {plugin_key}"}
-        marker = os.path.join(target["path"], self.PLUGIN_DISABLE_FILE)
-        try:
-            if enabled:
-                if os.path.exists(marker):
-                    os.remove(marker)
-            else:
-                open(marker, "w").close()
-            log_manager.info("version", f"插件{'启用' if enabled else '禁用'}: {plugin_key}")
-            return {"ok": True, "key": plugin_key, "enabled": enabled}
-        except Exception as e:
-            return {"ok": False, "msg": str(e)}
+        cur = self.current()
+        engine_dir = cur["path"] if cur else ""
+        if not engine_dir:
+            return {"ok": False, "msg": "当前无主引擎实例"}
+        cfg, _ = self._plugin_config(engine_dir)
+        dl = cfg.get("disabled_extensions")
+        if not isinstance(dl, list):
+            dl = []
+        names = [str(x) for x in dl]
+        if enabled:
+            names = [n for n in names if n != plugin_key]
+        elif plugin_key not in names:
+            names.append(plugin_key)
+        cfg["disabled_extensions"] = names
+        if not self._save_plugin_config(engine_dir, cfg):
+            return {"ok": False, "msg": "写入引擎 config.json 失败（请检查引擎目录权限）"}
+        log_manager.info("version", f"插件{'启用' if enabled else '禁用'}（config.json）: {plugin_key}")
+        return {"ok": True, "key": plugin_key, "enabled": enabled, "msg": "已写入引擎配置，重启引擎后生效"}
 
     # ---- 上面是原有方法，以下是新增：插件市场 / 安装 / 更新 / URL / 卸载 ----
 
