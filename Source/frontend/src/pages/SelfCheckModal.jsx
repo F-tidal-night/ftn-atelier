@@ -234,7 +234,7 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
                   ) : (
                   <>
                     <p className="font-medium text-accent">🔄 检测到新版本：v{updateInfo.latest}（当前 v{updateInfo.current}）</p>
-                    <p className="text-xs text-txt-muted mt-1 break-words">{updateInfo.body || '建议更新到最新版本，获得修复与新功能。'}</p>
+                    <div className="text-xs text-txt-muted mt-1 break-words whitespace-pre-line line-clamp-4">{updateInfo.body || '建议更新到最新版本，获得修复与新功能。'}</div>
                     <div className="mt-2 flex gap-2 justify-end">
                       <button onClick={() => setUpdateSkipped(true)} className="px-3 py-1.5 rounded-md border border-base-border text-xs">暂不更新</button>
                       <button onClick={beginUpdate} className="px-3 py-1.5 rounded-md bg-accent text-white text-xs">开始更新</button>
@@ -477,7 +477,7 @@ export default function SelfCheckModal({ mode = 'startup', checkUpdate = true, s
             {updateInfo.has_update ? (
               <>
                 <p className="font-medium text-accent">🔄 检测到新版本：v{updateInfo.latest}（当前 v{updateInfo.current}）</p>
-                <p className="text-xs text-txt-muted mt-1 break-words">{updateInfo.body || '建议更新到最新版本，获得修复与新功能。'}</p>
+                <div className="text-xs text-txt-muted mt-1 break-words whitespace-pre-line line-clamp-4">{updateInfo.body || '建议更新到最新版本，获得修复与新功能。'}</div>
                 <div className="mt-2 flex gap-2 justify-end">
                   <button onClick={done} className="px-3 py-1.5 rounded-md border border-base-border text-xs">暂不更新</button>
                   <button onClick={() => updateInfo.url && window.ftn?.openPath && window.ftn.openPath(updateInfo.url)}

@@ -68,6 +68,7 @@ class AssetManager:
         self._hash_thread = None
         self.scanning = False
         self.last_scan = None
+        self._last_auto_scan = 0.0
         self._cancel = threading.Event()
 
     # =================================================
@@ -138,22 +139,23 @@ class AssetManager:
             else:
                 roots = self._resolve_roots()
                 if not roots:
-                    # 主引擎已清空/无模型目录：全量扫描时同步清掉旧索引，
-                    # 否则清除主引擎后旧模型仍残留显示
+                    # 主引擎已清空/无模型目录：无论全量还是增量都清掉旧索引，
+                    # 否则清除主引擎后旧模型仍残留显示（demo 记录除外）
                     pruned = 0
-                    if full and not demo:
+                    if not demo:
                         pruned = self._prune_missing(set())
                     return self._scan_result(
                         started, 0, 0, scanned=0,
                         note="未配置主引擎模型目录" + (f"，已清理 {pruned} 条旧记录" if pruned else ""),
                         pruned=pruned,
                     )
-                rows, skipped = self._walk_roots(roots, full)
+                rows, skipped, seen = self._walk_roots(roots, full)
             stats = self._index(rows, force_update=bool(full and not demo))
             pruned = 0
+            if not demo and not self._cancel.is_set():
+                # 全量/增量/自动检测都以“目录实际文件集合”为准清理已删除、失效记录
+                pruned = self._prune_missing(seen)
             if full and not demo:
-                # 全量扫描 = 以当前扫描结果重建索引：清除已失效/过期记录（防重复与残留计数）
-                pruned = self._prune_missing({r["file_path"].lower() for r in rows})
                 # 同路径大小写变体去重（Windows 不区分大小写；老库可能残留双行）
                 try:
                     db.execute(
@@ -175,6 +177,42 @@ class AssetManager:
             )
         finally:
             self.scanning = False
+
+    def ensure_auto_scan(self, interval=60):
+        """模型页加载时调用：索引为空或距上次自动检测超时，后台跑增量扫描，不阻塞 UI。
+
+        增量扫描只 stat + 读有变化的文件头，几十 GB 模型库也不会卡页面。
+        用户删掉/移走模型后，下次进入模型页也会自动把失效记录清掉。
+        """
+        if self._primary_not_supported():
+            return {"ok": False, "auto_scan": False, "msg": "当前主引擎类型不受支持"}
+        if self.scanning:
+            return {"ok": True, "auto_scan": False, "msg": "扫描已在进行中"}
+        now = time.time()
+        if self._index_nonempty() and (now - self._last_auto_scan) < interval:
+            return {"ok": True, "auto_scan": False, "msg": "索引较新，跳过自动检测"}
+        with self._scan_lock:
+            if self.scanning:
+                return {"ok": True, "auto_scan": False, "msg": "扫描已在进行中"}
+            self._last_auto_scan = now
+        threading.Thread(target=self._auto_scan_worker, daemon=True).start()
+        return {"ok": True, "auto_scan": True, "msg": "已在后台自动检测模型"}
+
+    def _auto_scan_worker(self):
+        try:
+            self.scan(full=False)
+        except Exception as e:
+            log_manager.info("asset", f"后台自动检测失败: {e}")
+
+    def _index_nonempty(self):
+        """索引中是否已有真实模型记录（demo 除外）。"""
+        try:
+            row = db.query_one(
+                "SELECT COUNT(*) AS c FROM models WHERE file_path NOT LIKE 'demo://%'"
+            )
+            return bool(row and row.get("c"))
+        except Exception:
+            return False
 
     def _walk_roots(self, roots, full):
         """只扫各类型目录【顶层文件】（不递归子目录——插件/子文件夹不再混入）。
@@ -220,7 +258,9 @@ class AssetManager:
                     except OSError:
                         pass
                 rows.append(self._build_row(full_path, root_dir, forced_type=base_type))
-        return rows, skipped
+        # seen 含跳过文件：增量扫描时“实际存在的文件集合”也要包含它们，
+        # 否则清理失效记录会误删未变化的模型。
+        return rows, skipped, seen
 
     def _prune_missing(self, seen_paths):
         """全量扫描后清理失效记录：文件已不存在、或不在本次扫描范围内（残留/重复来源）。"""
@@ -231,6 +271,8 @@ class AssetManager:
         drop = []
         for r in rows:
             fp = r.get("file_path") or ""
+            if fp.lower().startswith("demo://"):
+                continue
             if fp.lower() not in seen_paths:
                 drop.append(r["id"])
         for rid in drop:
@@ -521,6 +563,43 @@ class AssetManager:
         if not os.path.isdir(folder):
             return {"ok": False, "msg": "模型所在目录不存在（文件可能已移动）"}
         return {"ok": True, "path": folder, "name": row.get("name"), "type": row.get("type")}
+
+    def _models_root_abs(self):
+        """主引擎 models/ 根目录（分类“打开文件夹”按钮用）。"""
+        try:
+            roots = self._resolve_roots()
+        except Exception:
+            roots = []
+        if not roots:
+            return ""
+        first = (roots[0][0] or "").rstrip("\\/")
+        # 正常路径：roots[0][0] = models/<分类目录>；旧配置回退：roots[0][0] = models/ 本身
+        if os.path.basename(first).lower() in _DIR_TYPE_MAP:
+            return os.path.dirname(first)
+        return first
+
+    def category_dir(self, model_type):
+        """当前分类对应的模型文件夹：all → models/ 根目录，其余 → models/<分类目录>。
+
+        用于模型页顶部“打开文件夹”按钮；分类目录不存在时回退到 models/ 根目录。
+        """
+        root = self._models_root_abs()
+        if not root or not os.path.isdir(root):
+            return {"ok": False, "msg": "未配置主引擎模型目录"}
+        if model_type in (None, "", "all"):
+            folder = root
+        else:
+            folder = os.path.join(root, _type_dir(model_type))
+        fallback = False
+        if not os.path.isdir(folder):
+            folder = root
+            fallback = True
+        return {
+            "ok": True,
+            "path": folder,
+            "type": model_type or "all",
+            "fallback": fallback,
+        }
 
     def _type_dir_abs(self, model_type):
         """某分类对应的绝对目录（主引擎 models/<分类目录>）。"""

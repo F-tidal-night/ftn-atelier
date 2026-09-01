@@ -69,7 +69,10 @@ export default function Layout({ active, onNavigate, children }) {
       {/* 内容区（半透明底，让外观动画在背后隐约透出） */}
       <main
         className="flex-1 min-w-0 overflow-y-auto relative z-10"
-        style={{ background: 'color-mix(in srgb, var(--color-bg) 70%, transparent)' }}
+        style={{
+          background: 'color-mix(in srgb, var(--color-bg) 70%, transparent)',
+          scrollbarGutter: 'stable',
+        }}
       >
         {children}
       </main>

@@ -324,6 +324,18 @@ async def models_scan(demo: bool = False, full: bool = True):
     return result
 
 
+@app.post("/api/models/auto-scan")
+async def models_auto_scan():
+    """模型页加载时的自动检测：索引为空或距上次自动检测超时则后台增量扫描。"""
+    return asset_manager.ensure_auto_scan()
+
+
+@app.get("/api/models/folder")
+async def models_folder(type: str = "all"):
+    """返回当前分类对应的模型文件夹（打开文件夹按钮用）。"""
+    return asset_manager.category_dir(model_type=type)
+
+
 @app.get("/api/models/{model_id}/lora")
 async def models_lora_detail(model_id: str):
     """LoRA 详情：safetensors metadata（SafetensorsMetadataProvider）+ 手动覆盖合并。"""

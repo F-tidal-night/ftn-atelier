@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { backendApi } from '../services/apiClient'
 import LoraDetailModal from './LoraDetailModal'
 
@@ -23,7 +23,7 @@ const CAT_COLORS = {
 // 只有底模 / LoRA 需要预览图功能；其余类型用简单占位图标
 const PREVIEW_TYPES = ['checkpoint', 'lora', 'lora_plugin']
 
-export default function Models({ onNavigate }) {
+export default function Models() {
   const [cat, setCat] = useState('all')
   const [query, setQuery] = useState('')
   const [models, setModels] = useState([])
@@ -36,19 +36,62 @@ export default function Models({ onNavigate }) {
   const [addType, setAddType] = useState('checkpoint')
   const [adding, setAdding] = useState(false)
 
-  const load = useCallback(async (type = cat, q = query) => {
-    setLoading(true)
+  const reqRef = useRef(0)
+  const catRef = useRef('all')
+  const queryRef = useRef('')
+  useEffect(() => { catRef.current = cat }, [cat])
+  useEffect(() => { queryRef.current = query }, [query])
+
+  // silent：切换分类/自动检测刷新时不闪“加载中”，旧列表保持原位，避免布局跳动
+  const load = useCallback(async (type = cat, q = query, opts = {}) => {
+    const rid = ++reqRef.current
+    if (!opts.silent) setLoading(true)
     try {
       const [list, st] = await Promise.all([
         backendApi.modelsList({ type, q: q || undefined, limit: 300 }),
         backendApi.modelsStats(),
       ])
+      if (rid !== reqRef.current) return
       setModels(list || [])
       setStats(st)
-    } catch { setModels([]) } finally { setLoading(false) }
+    } catch {
+      if (rid !== reqRef.current) return
+      setModels([])
+    } finally {
+      if (rid === reqRef.current) setLoading(false)
+    }
   }, [cat, query])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [])
+
+  // 自动检测：进入模型页自动触发后台增量扫描，不阻塞列表；
+  // 只有索引为空或超过 60 秒才会真正扫描；扫描结束后静默刷新一次。
+  useEffect(() => {
+    let cancelled = false
+    let timer = null
+    let polls = 0
+    const stop = () => { if (timer) { clearTimeout(timer); timer = null } }
+    backendApi.modelsAutoScan()
+      .then((r) => {
+        if (!r?.auto_scan || cancelled) return
+        const poll = async () => {
+          if (cancelled) return
+          polls += 1
+          try {
+            const st = await backendApi.modelsStats()
+            if (!st?.scanning || polls >= 30) {
+              load(catRef.current, queryRef.current, { silent: true })
+              return
+            }
+          } catch { /* 后端瞬时不可用，等下一轮再试 */ }
+          if (!cancelled && polls < 30) timer = setTimeout(poll, 1000)
+        }
+        timer = setTimeout(poll, 1200)
+      })
+      .catch(() => {})
+    return () => { cancelled = true; stop() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const doScan = async (full, demo) => {
     setScanning(true)
@@ -60,6 +103,24 @@ export default function Models({ onNavigate }) {
     } catch (e) {
       setScanMsg(`扫描失败: ${e.message}`)
     } finally { setScanning(false) }
+  }
+
+  // 打开当前分类对应的模型文件夹（全部 → models/ 根目录，其余 → 分类目录）
+  const openFolder = async () => {
+    if (!window.ftn?.openPath) {
+      setScanMsg('当前非 Electron 环境，无法打开文件夹')
+      return
+    }
+    try {
+      const r = await backendApi.modelsFolder(cat)
+      if (r?.ok) {
+        await window.ftn.openPath(r.path)
+      } else {
+        setScanMsg(r?.msg || '打开文件夹失败')
+      }
+    } catch (e) {
+      setScanMsg(`打开文件夹失败: ${e.message}`)
+    }
   }
 
   // 添加模型：多选文件 → 剪切到当前分类目录（"全部"则用面板内所选分类）
@@ -94,30 +155,24 @@ export default function Models({ onNavigate }) {
           <h1 className="text-2xl font-bold">模型管理</h1>
           <p className="text-sm text-txt-muted mt-1">共 {stats?.total ?? 0} 个模型资产</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && load()}
             placeholder="搜索模型..."
-            className="px-3 py-2 rounded-lg border border-base-border bg-base-surface text-sm w-56 focus:outline-none focus:border-accent"
+            className="px-3 py-2 rounded-lg border border-base-border bg-base-surface text-sm w-56 shrink-0 focus:outline-none focus:border-accent"
           />
 
-          <button onClick={() => onNavigate && onNavigate('downloads')}
-            className="px-3 py-2 rounded-lg border border-accent/40 text-accent text-sm hover:bg-accent-soft"
-
-            title="前往独立「网络下载」菜单页">🌐 下载模型</button>
+          <button onClick={openFolder}
+            className="px-3 py-2 rounded-lg border border-base-border text-sm hover:bg-base-surface-2 whitespace-nowrap shrink-0"
+            title="打开当前分类对应的模型文件夹">📂 打开文件夹</button>
           <button onClick={() => setAddOpen((v) => !v)}
-            className="px-3 py-2 rounded-lg border border-accent/40 text-accent text-sm hover:bg-accent-soft">＋ 添加模型</button>
-          <button
-            onClick={() => doScan(false, false)}
-            disabled={scanning}
-            className="px-3 py-2 rounded-lg border border-base-border text-sm hover:bg-base-surface-2 disabled:opacity-40"
-          >快速扫描</button>
+            className="px-3 py-2 rounded-lg border border-accent/40 text-accent text-sm hover:bg-accent-soft whitespace-nowrap shrink-0">＋ 添加模型</button>
           <button
             onClick={() => doScan(true, false)}
             disabled={scanning}
-            className="px-3 py-2 rounded-lg border border-base-border text-sm hover:bg-base-surface-2 disabled:opacity-40"
+            className="px-3 py-2 rounded-lg border border-base-border text-sm hover:bg-base-surface-2 disabled:opacity-40 whitespace-nowrap shrink-0"
             title="完整重建索引（重新读取全部模型文件头信息，较慢）"
           >全量扫描</button>
         </div>
@@ -161,9 +216,9 @@ export default function Models({ onNavigate }) {
           return (
             <button
               key={c.key}
-              onClick={() => { setCat(c.key); if (c.key !== 'all') setAddType(c.key); load(c.key) }}
+              onClick={() => { setCat(c.key); if (c.key !== 'all') setAddType(c.key); load(c.key, query, { silent: true }) }}
               className={[
-                'px-4 py-2.5 rounded-xl text-left border transition-all min-w-[120px]',
+                'px-4 py-2.5 rounded-xl text-left border transition-all min-w-[120px] shrink-0 whitespace-nowrap',
                 active
                   ? 'border-accent/60 bg-accent-soft shadow-lg shadow-accent/10'
                   : 'border-base-border bg-base-surface hover:border-accent/40 hover:bg-base-surface-2',
@@ -190,20 +245,22 @@ export default function Models({ onNavigate }) {
                 ↻ 已合并 {dupGroups} 组重复模型（同一内容的多个副本，仅显示一份；完整列表在哈希计算完成后更新）
               </p>
             )}
-      {loading ? (
-        <p className="text-txt-muted text-sm">加载中...</p>
-      ) : visible.length === 0 ? (
-        <div className="text-center py-16 text-txt-muted">
-          <p className="text-4xl mb-3">🗂️</p>
-          <p>暂无模型。点击「全量扫描」索引主引擎模型目录，或「＋ 添加模型」剪切式导入。</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-5">
-          {visible.map((m) => (
-            <ModelCard key={m.id} model={m} onOpen={() => setDetail(m)} />
-          ))}
-        </div>
-      )}
+            <div className="min-h-[320px]">
+              {loading ? (
+                <p className="text-txt-muted text-sm">加载中...</p>
+              ) : visible.length === 0 ? (
+                <div className="text-center py-16 text-txt-muted">
+                  <p className="text-4xl mb-3">🗂️</p>
+                  <p>暂无模型。已自动检测主引擎模型目录，也可点击「全量扫描」重建索引，或「＋ 添加模型」导入。</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-5">
+                  {visible.map((m) => (
+                    <ModelCard key={m.id} model={m} onOpen={() => setDetail(m)} />
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )
       })()}
