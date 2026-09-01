@@ -21,11 +21,63 @@ const BACKEND_HOST = '127.0.0.1'
 
 // 后端 Python 解释器解析顺序：内置运行时（开箱即用）→ venv → 系统 python
 const BACKEND_DIR = path.join(__dirname, '..', '..', 'backend')
-// 应用数据根目录：打包后写入用户数据目录（%APPDATA%/FTN Atelier），
-// 开发模式沿用源码根目录（Logs/Database 与源码同层）
-const APP_DATA_DIR = app.isPackaged
-  ? path.join(app.getPath('userData'))
-  : path.join(__dirname, '..', '..', '..')
+// 应用数据根目录（对齐绘世：数据跟程序走，便携文件夹拷走即带走设置/引擎/模型索引）：
+//   打包后优先跟随 exe 所在目录；仅当 exe 目录不可写（如被放进 Program Files）
+//   才回退到用户数据目录（%APPDATA%），避免启动即崩溃。
+//   开发模式沿用源码根目录（Logs/Database 与源码同层）。
+function resolveAppDataDir() {
+  if (!app.isPackaged) return path.join(__dirname, '..', '..', '..')
+  const exeDir = path.dirname(app.getPath('exe'))
+  try {
+    const probe = path.join(exeDir, 'Database')
+    fs.mkdirSync(probe, { recursive: true })
+    fs.accessSync(probe, fs.constants.W_OK)
+    return exeDir
+  } catch {
+    return app.getPath('userData')
+  }
+}
+const APP_DATA_DIR = resolveAppDataDir()
+
+/**
+ * 一次性迁移：旧版本打包后数据写在 %APPDATA% 用户目录，新版本改为
+ * “数据跟程序走”（便携根目录）。检测到 exe 旁还没有数据、而旧用户目录
+ * 有数据库时，把旧数据搬过来，避免“更新后设置/引擎全没了”的观感。
+ * 仅在目标目录无数据时执行；逐目录迁移，失败单个不阻塞其余。
+ */
+function migrateLegacyData(targetDir) {
+  if (!app.isPackaged) return
+  try {
+    if (fs.existsSync(path.join(targetDir, 'Database', 'ftn.db'))) return
+    const legacy = app.getPath('userData')
+    if (!legacy || legacy.toLowerCase() === targetDir.toLowerCase()) return
+    if (!fs.existsSync(path.join(legacy, 'Database', 'ftn.db'))) return
+    for (const d of ['Database', 'Logs', 'Data', 'Core', 'Backup']) {
+      const src = path.join(legacy, d)
+      const dst = path.join(targetDir, d)
+      if (!fs.existsSync(src)) continue
+      try {
+        const dstNonEmpty = fs.existsSync(dst) && fs.readdirSync(dst).length > 0
+        if (dstNonEmpty) continue
+        if (fs.existsSync(dst)) {
+          // 目标只有探测/启动产生的空目录：先移除，让旧目录整体瞬移
+          try { fs.rmdirSync(dst) } catch { /* 非空则走复制分支 */ }
+        }
+        try {
+          fs.renameSync(src, dst) // 同盘瞬移；跨盘失败自动回退复制
+        } catch {
+          fs.cpSync(src, dst, { recursive: true })
+        }
+      } catch {
+        /* 单个目录迁移失败不阻塞 */
+      }
+    }
+    console.log('[FTN] 已把旧版数据迁移到便携根目录:', legacy, '->', targetDir)
+  } catch (err) {
+    console.error('[FTN] 迁移旧版数据失败:', err.message)
+  }
+}
+migrateLegacyData(APP_DATA_DIR)
 const EMBED_PYTHON = path.join(BACKEND_DIR, 'runtime', 'python.exe')
 const VENV_PYTHON = path.join(BACKEND_DIR, 'venv', 'Scripts', 'python.exe')
 const GLOBAL_PYTHON = 'python'
@@ -321,6 +373,7 @@ function forceCleanupOrphan() {
 module.exports = {
   BACKEND_PORT,
   BACKEND_HOST,
+  APP_DATA_DIR,
   ensureBackendUp,
   shutdownBackend,
   isBackendReady,

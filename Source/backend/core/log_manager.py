@@ -284,6 +284,8 @@ class LogManager:
                         lines = f.readlines()[-max_lines:]
                 except Exception:
                     continue
+                # 引擎原始输出本身不带时间：补上“Atelier 读到该行”的时间（接近真实，秒级误差）
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 for ln in lines:
                     s = ln.rstrip("\n")
                     if not s.strip():
@@ -297,8 +299,11 @@ class LogManager:
                     else:
                         lvl = "INFO"
                     rows.append({
-                        "time": "", "level": lvl,
-                        "source": f"engine:{src}", "message": s[:500],
+                        "time": ts, "level": lvl,
+                        "source": f"engine:{src}",
+                        # 前端展示与导出统一读取 content；message 保留兼容
+                        "content": s[:500],
+                        "message": s[:500],
                     })
         except Exception:
             pass

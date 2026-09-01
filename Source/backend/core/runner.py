@@ -26,6 +26,7 @@ import subprocess
 import threading
 import json
 import urllib.request
+import shutil
 
 from core.status import status_manager
 from core.log_manager import log_manager, LOG_DIR
@@ -274,7 +275,13 @@ class Runner:
         return [entry]
 
     def _engine_env(self):
-        """引擎启动环境：注入 pip / HF 镜像（首次启动自动装依赖时国内可达）。"""
+        """引擎启动环境：注入 pip / HF 镜像（首次启动自动装依赖时国内可达）。
+
+        bat 入口引擎（webui.bat / 一键启动.bat）内部会调 `python` 走系统 PATH；
+        全新电脑没有装系统 Python 时，把 Atelier 内置 Python 目录临时注入 PATH，
+        让 bat 创建 venv 时能找到 python（仅当系统 python 缺失时注入，不干扰
+        本机已装 Python 的用户）。
+        """
         env = os.environ.copy()
         try:
             from core.config_manager import config_manager
@@ -283,6 +290,17 @@ class Runner:
                 env["PIP_INDEX_URL"] = e.pip_mirror.strip()
             if e.use_hf_mirror and (e.hf_endpoint or "").strip():
                 env["HF_ENDPOINT"] = e.hf_endpoint.strip()
+        except Exception:
+            pass
+        try:
+            if shutil.which("python") is None:
+                py_dir = os.path.dirname(os.path.abspath(sys.executable))
+                if py_dir and os.path.isdir(py_dir):
+                    env["PATH"] = py_dir + os.pathsep + env.get("PATH", "")
+                    log_manager.info(
+                        "runner",
+                        "系统未检测到 python，已把内置 Python 注入引擎 PATH（bat 首次建 venv 可用）",
+                    )
         except Exception:
             pass
         return env

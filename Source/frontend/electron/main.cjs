@@ -19,7 +19,7 @@ const path = require('path')
 const fs = require('fs')
 const { execFile, spawn } = require('child_process')
 
-const { ensureBackendUp, shutdownBackend, forceCleanupOrphan, BACKEND_PORT, BACKEND_HOST } = require('./backendManager.cjs')
+const { ensureBackendUp, shutdownBackend, forceCleanupOrphan, BACKEND_PORT, BACKEND_HOST, APP_DATA_DIR } = require('./backendManager.cjs')
 const { buildUpdateScript } = require('./updateScript.cjs')
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL
@@ -546,7 +546,7 @@ ipcMain.handle('image:prepareHero', async (_evt, p) => {
     let out = img
     if (size.width > MAX_W) out = img.resize({ width: MAX_W })
     const buf = out.toJPEG(88)
-    const dir = path.join(app.getPath('userData'), 'hero')
+    const dir = path.join(APP_DATA_DIR, 'hero')
     fs.mkdirSync(dir, { recursive: true })
     const outPath = path.join(dir, 'hero.jpg')
     fs.writeFileSync(outPath, buf)
@@ -577,7 +577,7 @@ ipcMain.handle('image:saveHeroData', async (_evt, dataUrl) => {
     const img = nativeImage.createFromDataURL(dataUrl)
     if (img.isEmpty()) return { ok: false, error: '图片编码失败' }
     const buf = img.toJPEG(88)
-    const dir = path.join(app.getPath('userData'), 'hero')
+    const dir = path.join(APP_DATA_DIR, 'hero')
     fs.mkdirSync(dir, { recursive: true })
     const out = path.join(dir, 'hero.jpg')
     fs.writeFileSync(out, buf)

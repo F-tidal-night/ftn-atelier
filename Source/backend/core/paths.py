@@ -1,9 +1,10 @@
 # ============================================
 # FTN Studio 应用数据根目录（统一入口）
 #
-# 开发/便携运行：以源码目录为根（Logs/Database/Data/Core/Backup 同在源码根）。
-# 打包运行：Electron 主进程注入 FTN_APP_DIR（%APPDATA%/FTN Atelier），
-# 数据写入用户目录，避免写进 Program Files 等只读位置。
+# 开发运行：以源码目录为根（Logs/Database/Data/Core/Backup 同在源码根）。
+# 打包运行：Electron 主进程注入 FTN_APP_DIR——默认跟随 exe 所在目录
+# （对齐绘世：便携文件夹拷走即带走全部数据）；仅当 exe 目录不可写时
+# 回退到用户数据目录（%APPDATA%/FTN Atelier）。
 # ============================================
 
 import os
